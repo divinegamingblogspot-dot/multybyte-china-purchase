@@ -1,4 +1,4 @@
-const DATA_URL = './data.json';
+const DATA_URL = 'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/data.json';
 const AUTO_REFRESH_MS = 10 * 1000;
 
 let allProducts = [];
