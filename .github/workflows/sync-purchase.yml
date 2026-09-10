@@ -1,0 +1,128 @@
+name: Sync China Purchase Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch purchase data and cache images
+        env:
+          API_URL: https://script.google.com/macros/s/AKfycbwDHq7TB9vSxTlSeG9i55HyuhPzAP8oryRWdLsKhPZVHQubgdIAs8CJ7sknQTJLmabj/exec?action=data
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import hashlib
+          import mimetypes
+          import pathlib
+          import urllib.request
+          import urllib.error
+
+          api = os.environ['API_URL']
+          req = urllib.request.Request(
+              api,
+              headers={'User-Agent': 'Multybyte-China-Purchase-Sync/1.0'}
+          )
+
+          with urllib.request.urlopen(req, timeout=30) as r:
+              raw = r.read().decode('utf-8-sig').strip()
+
+          # Support either normal JSON or JSONP.
+          if raw.startswith('{'):
+              payload = json.loads(raw)
+          else:
+              start = raw.find('(')
+              end = raw.rfind(')')
+              if start < 0 or end <= start:
+                  raise RuntimeError('Apps Script did not return valid JSON/JSONP')
+              payload = json.loads(raw[start + 1:end])
+
+          if not payload.get('success') or not isinstance(payload.get('data'), list):
+              raise RuntimeError('Invalid purchase data returned by Apps Script')
+
+          pathlib.Path('images').mkdir(exist_ok=True)
+
+          def clean_url(value):
+              if not value:
+                  return ''
+              value = str(value).strip()
+              value = value.replace('\\u0026', '&').replace('&amp;', '&')
+              if value.startswith('//'):
+                  value = 'https:' + value
+              return value if re.match(r'^https?://', value, re.I) else ''
+
+          def extension(url, content_type):
+              path = url.split('?', 1)[0].lower()
+              for ext in ('.webp', '.jpg', '.jpeg', '.png', '.gif'):
+                  if path.endswith(ext):
+                      return ext
+              ext = mimetypes.guess_extension(content_type.split(';')[0].strip()) if content_type else None
+              return ext if ext in ('.webp', '.jpg', '.jpeg', '.png', '.gif') else '.jpg'
+
+          products = []
+          for item in payload['data']:
+              p = dict(item)
+              source_image = clean_url(p.get('image'))
+
+              if source_image:
+                  key = hashlib.sha256(source_image.encode('utf-8')).hexdigest()[:24]
+                  try:
+                      image_req = urllib.request.Request(
+                          source_image,
+                          headers={'User-Agent': 'Mozilla/5.0'}
+                      )
+                      with urllib.request.urlopen(image_req, timeout=30) as r:
+                          content_type = r.headers.get('Content-Type', '')
+                          body = r.read()
+                          ext = extension(source_image, content_type)
+
+                      filename = f'images/{key}{ext}'
+                      with open(filename, 'wb') as f:
+                          f.write(body)
+
+                      p['image'] = f'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/{filename}'
+                  except Exception as exc:
+                      print(f'Image cache failed for {source_image}: {exc}')
+                      # Keep original image URL as fallback.
+                      p['image'] = source_image
+              else:
+                  p['image'] = ''
+
+              products.append(p)
+
+          output = {
+              'success': True,
+              'updated': payload.get('updated'),
+              'data': products
+          }
+
+          with open('data.json', 'w', encoding='utf-8') as f:
+              json.dump(output, f, ensure_ascii=False, separators=(',', ':'))
+              f.write('\n')
+          PY
+
+      - name: Commit updated data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data.json images/
+          if git diff --cached --quiet; then
+            echo 'No changes to publish.'
+            exit 0
+          fi
+          git commit -m 'Auto-sync China purchase data'
+          git push
