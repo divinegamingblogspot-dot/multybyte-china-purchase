@@ -70,7 +70,9 @@ function normalizeUrl(value) {
   if (!value) return '';
   let url = String(value).trim().replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
   if (url.startsWith('//')) url = 'https:' + url;
-  return /^https?:\/\//i.test(url) ? url : '';
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('./') || url.startsWith('../') || url.startsWith('/')) return url;
+  return '';
 }
 
 function showError(message) {
@@ -158,8 +160,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Check GitHub for new Sheet data automatically every 10 seconds.
-// Apps Script instant push publishes changes immediately; GitHub Actions remains the backup.
 setInterval(() => loadData(false), AUTO_REFRESH_MS);
 
 loadData(true);
