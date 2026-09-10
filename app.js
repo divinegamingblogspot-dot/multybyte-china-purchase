@@ -1,7 +1,10 @@
 const DATA_URL = './data.json';
+const AUTO_REFRESH_MS = 60 * 1000;
 
 let allProducts = [];
 let requestTimer = null;
+let lastUpdated = '';
+let loading = false;
 
 const $ = id => document.getElementById(id);
 
@@ -9,18 +12,22 @@ function setState(name, show) {
   $(name).classList.toggle('hidden', !show);
 }
 
-async function loadData() {
-  setState('loading', true);
-  setState('error', false);
-  setState('empty', false);
-  $('statusText').textContent = 'Loading purchase data…';
+async function loadData(showLoading = true) {
+  if (loading) return;
+  loading = true;
+
+  if (showLoading) {
+    setState('loading', true);
+    setState('error', false);
+    setState('empty', false);
+    $('statusText').textContent = 'Checking latest purchase data…';
+  }
 
   try {
-    // Strong cache-buster so every refresh asks GitHub Pages for the newest data.json.
     const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
     const response = await fetch(DATA_URL + '?v=' + cacheBust, {
       cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache' }
+      headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
     });
     if (!response.ok) throw new Error('Data server returned HTTP ' + response.status);
 
@@ -29,22 +36,33 @@ async function loadData() {
       throw new Error('Invalid purchase data');
     }
 
-    allProducts = data.data.map(p => ({
-      ...p,
-      productLink: normalizeUrl(p.productLink),
-      image: normalizeUrl(p.image)
-    }));
+    const incomingUpdated = data.updated || '';
+    const changed = incomingUpdated !== lastUpdated || allProducts.length === 0;
+
+    if (changed) {
+      allProducts = data.data.map(p => ({
+        ...p,
+        productLink: normalizeUrl(p.productLink),
+        image: normalizeUrl(p.image)
+      }));
+      lastUpdated = incomingUpdated;
+      render();
+    }
 
     $('countBadge').textContent = `${allProducts.length} item${allProducts.length === 1 ? '' : 's'}`;
-    $('statusText').textContent = data.updated
-      ? `Updated ${new Date(data.updated).toLocaleString()}`
+    $('statusText').textContent = incomingUpdated
+      ? `Updated ${new Date(incomingUpdated).toLocaleString()}`
       : 'Data synced';
 
     setState('loading', false);
-    render();
+    setState('error', false);
+    loading = false;
   } catch (error) {
     console.error(error);
-    showError('Could not load the China purchase data. Try Refresh again.');
+    loading = false;
+    if (showLoading || allProducts.length === 0) {
+      showError('Could not load the China purchase data. Try Refresh again.');
+    }
   }
 }
 
@@ -89,7 +107,6 @@ function render() {
     supplier.textContent = p.supplier || '—';
 
     if (p.image) {
-      // Also bust image CDN/browser cache when the image URL changes.
       const separator = p.image.includes('?') ? '&' : '?';
       img.src = p.image + separator + 'v=' + encodeURIComponent(dataVersion(p));
       img.alt = p.productName || p.sku || 'Product image';
@@ -133,10 +150,16 @@ $('clearBtn').addEventListener('click', () => {
   $('searchInput').focus();
 });
 
-$('refreshBtn').addEventListener('click', loadData);
+$('refreshBtn').addEventListener('click', () => loadData(true));
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
 }
 
-loadData();
+// Check GitHub for new Sheet data automatically every minute.
+// The GitHub Action publishes fresh data approximately every 5 minutes.
+setInterval(() => loadData(false), AUTO_REFRESH_MS);
+
+loadData(true);
