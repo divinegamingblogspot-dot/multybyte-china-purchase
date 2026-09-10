@@ -37,7 +37,12 @@ function loadData() {
       return;
     }
 
-    allProducts = data.data;
+    allProducts = data.data.map(p => ({
+      ...p,
+      productLink: normalizeUrl(p.productLink),
+      image: normalizeUrl(p.image)
+    }));
+
     $('countBadge').textContent = `${allProducts.length} item${allProducts.length === 1 ? '' : 's'}`;
     $('statusText').textContent = `Updated ${new Date(data.updated || Date.now()).toLocaleString()}`;
     render();
@@ -50,6 +55,14 @@ function loadData() {
 
   script.src = `${API_URL}?action=data&callback=${encodeURIComponent(callback)}&_=${Date.now()}`;
   document.body.appendChild(script);
+}
+
+function normalizeUrl(value) {
+  if (!value) return '';
+  let url = String(value).trim();
+  url = url.replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
+  if (url.startsWith('//')) url = 'https:' + url;
+  return /^https?:\/\//i.test(url) ? url : '';
 }
 
 function showError(message) {
@@ -88,13 +101,21 @@ function render() {
     if (p.image) {
       img.src = p.image;
       img.alt = p.productName || p.sku || 'Product image';
-      img.onerror = () => imageWrap.classList.add('no-photo');
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = () => {
+        img.removeAttribute('src');
+        imageWrap.classList.add('no-photo');
+      };
     } else {
       imageWrap.classList.add('no-photo');
     }
 
-    if (p.productLink && /^https?:\/\//i.test(p.productLink)) {
+    if (p.productLink) {
       link.href = p.productLink;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Open Product';
     } else {
       link.removeAttribute('href');
       link.textContent = 'No product link';
