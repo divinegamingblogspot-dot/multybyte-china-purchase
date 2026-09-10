@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbwDHq7TB9vSxTlSeG9i55HyuhPzAP8oryRWdLsKhPZVHQubgdIAs8CJ7sknQTJLmabj/exec';
+const DATA_URL = 'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/data.json';
 
 let allProducts = [];
 let requestTimer = null;
@@ -9,32 +9,25 @@ function setState(name, show) {
   $(name).classList.toggle('hidden', !show);
 }
 
-function loadData() {
+async function loadData() {
   setState('loading', true);
   setState('error', false);
   setState('empty', false);
-  $('statusText').textContent = 'Connecting to purchase data…';
+  $('statusText').textContent = 'Loading purchase data…';
 
-  const callback = 'multybyteCallback_' + Date.now();
-  const script = document.createElement('script');
-  const timeout = setTimeout(() => {
-    cleanup();
-    showError('Could not connect to the purchase database. Check the Apps Script deployment and internet connection.');
-  }, 20000);
+  try {
+    const response = await fetch(DATA_URL + '?v=' + Date.now(), {
+      cache: 'no-store'
+    });
 
-  function cleanup() {
-    clearTimeout(timeout);
-    delete window[callback];
-    script.remove();
-  }
+    if (!response.ok) {
+      throw new Error('Data server returned HTTP ' + response.status);
+    }
 
-  window[callback] = data => {
-    cleanup();
-    setState('loading', false);
+    const data = await response.json();
 
     if (!data || data.success !== true || !Array.isArray(data.data)) {
-      showError(data && data.error ? data.error : 'Invalid data received from server.');
-      return;
+      throw new Error('Invalid purchase data');
     }
 
     allProducts = data.data.map(p => ({
@@ -43,25 +36,37 @@ function loadData() {
       image: normalizeUrl(p.image)
     }));
 
-    $('countBadge').textContent = `${allProducts.length} item${allProducts.length === 1 ? '' : 's'}`;
-    $('statusText').textContent = `Updated ${new Date(data.updated || Date.now()).toLocaleString()}`;
+    $('countBadge').textContent =
+      `${allProducts.length} item${allProducts.length === 1 ? '' : 's'}`;
+
+    $('statusText').textContent = data.updated
+      ? `Updated ${new Date(data.updated).toLocaleString()}`
+      : 'Data synced';
+
+    setState('loading', false);
     render();
-  };
 
-  script.onerror = () => {
-    cleanup();
-    showError('Network error while connecting to the purchase database.');
-  };
-
-  script.src = `${API_URL}?action=data&callback=${encodeURIComponent(callback)}&_=${Date.now()}`;
-  document.body.appendChild(script);
+  } catch (error) {
+    console.error(error);
+    showError(
+      'Could not load the China purchase data. Try Refresh again.'
+    );
+  }
 }
 
 function normalizeUrl(value) {
   if (!value) return '';
+
   let url = String(value).trim();
-  url = url.replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
-  if (url.startsWith('//')) url = 'https:' + url;
+
+  url = url
+    .replace(/\\u0026/g, '&')
+    .replace(/&amp;/g, '&');
+
+  if (url.startsWith('//')) {
+    url = 'https:' + url;
+  }
+
   return /^https?:\/\//i.test(url) ? url : '';
 }
 
@@ -74,8 +79,15 @@ function showError(message) {
 
 function render() {
   const query = $('searchInput').value.trim().toLowerCase();
+
   const filtered = allProducts.filter(p => {
-    const text = [p.sku, p.productName, p.supplier, p.quantity].join(' ').toLowerCase();
+    const text = [
+      p.sku,
+      p.productName,
+      p.supplier,
+      p.quantity
+    ].join(' ').toLowerCase();
+
     return !query || text.includes(query);
   });
 
@@ -83,8 +95,10 @@ function render() {
   setState('empty', filtered.length === 0);
 
   const template = $('productTemplate');
+
   filtered.forEach(p => {
     const node = template.content.cloneNode(true);
+
     const imageWrap = node.querySelector('.image-wrap');
     const img = node.querySelector('.product-image');
     const sku = node.querySelector('.sku');
@@ -94,7 +108,8 @@ function render() {
     const link = node.querySelector('.product-link');
 
     sku.textContent = p.sku || 'NO SKU';
-    name.textContent = p.productName || 'Product information unavailable';
+    name.textContent =
+      p.productName || 'Product information unavailable';
     quantity.textContent = p.quantity || '—';
     supplier.textContent = p.supplier || '—';
 
@@ -103,6 +118,7 @@ function render() {
       img.alt = p.productName || p.sku || 'Product image';
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
+
       img.onerror = () => {
         img.removeAttribute('src');
         imageWrap.classList.add('no-photo');
@@ -140,7 +156,9 @@ $('clearBtn').addEventListener('click', () => {
 $('refreshBtn').addEventListener('click', loadData);
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
 }
 
 loadData();
