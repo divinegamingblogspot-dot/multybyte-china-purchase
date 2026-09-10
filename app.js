@@ -16,7 +16,12 @@ async function loadData() {
   $('statusText').textContent = 'Loading purchase data…';
 
   try {
-    const response = await fetch(DATA_URL + '?v=' + Date.now(), { cache: 'no-store' });
+    // Strong cache-buster so every refresh asks GitHub Pages for the newest data.json.
+    const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
+    const response = await fetch(DATA_URL + '?v=' + cacheBust, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' }
+    });
     if (!response.ok) throw new Error('Data server returned HTTP ' + response.status);
 
     const data = await response.json();
@@ -84,7 +89,9 @@ function render() {
     supplier.textContent = p.supplier || '—';
 
     if (p.image) {
-      img.src = p.image;
+      // Also bust image CDN/browser cache when the image URL changes.
+      const separator = p.image.includes('?') ? '&' : '?';
+      img.src = p.image + separator + 'v=' + encodeURIComponent(dataVersion(p));
       img.alt = p.productName || p.sku || 'Product image';
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
@@ -109,6 +116,10 @@ function render() {
 
     $('products').appendChild(node);
   });
+}
+
+function dataVersion(p) {
+  return [p.sku, p.productName, p.quantity, p.supplier, p.productLink, p.image].join('|');
 }
 
 $('searchInput').addEventListener('input', () => {
