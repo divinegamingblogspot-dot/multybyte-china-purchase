@@ -27,8 +27,7 @@ async function loadData(showLoading = true) {
   try {
     const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
     const response = await fetch(DATA_URL + '?v=' + cacheBust, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+      cache: 'no-store'
     });
     if (!response.ok) throw new Error('Data server returned HTTP ' + response.status);
 
