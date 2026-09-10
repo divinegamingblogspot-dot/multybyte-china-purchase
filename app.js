@@ -1,4 +1,5 @@
-const DATA_URL = 'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/data.json';
+const DATA_URL = 'https://raw.githubusercontent.com/divinegamingblogspot-dot/multybyte-china-purchase/main/data.json';
+const IMAGE_BASE_URL = 'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/';
 const AUTO_REFRESH_MS = 10 * 1000;
 
 let allProducts = [];
@@ -43,7 +44,7 @@ async function loadData(showLoading = true) {
       allProducts = data.data.map(p => ({
         ...p,
         productLink: normalizeUrl(p.productLink),
-        image: normalizeUrl(p.image)
+        image: normalizeImageUrl(p.image)
       }));
       lastUpdated = incomingUpdated;
       render();
@@ -58,7 +59,7 @@ async function loadData(showLoading = true) {
     setState('error', false);
     loading = false;
   } catch (error) {
-    console.error(error);
+    console.error('China purchase data load failed:', error);
     loading = false;
     if (showLoading || allProducts.length === 0) {
       showError('Could not load the China purchase data. Try Refresh again.');
@@ -72,6 +73,17 @@ function normalizeUrl(value) {
   if (url.startsWith('//')) url = 'https:' + url;
   if (/^https?:\/\//i.test(url)) return url;
   if (url.startsWith('./') || url.startsWith('../') || url.startsWith('/')) return url;
+  return '';
+}
+
+function normalizeImageUrl(value) {
+  if (!value) return '';
+  let url = String(value).trim().replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
+  if (url.startsWith('//')) return 'https:' + url;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('./')) return IMAGE_BASE_URL + url.slice(2);
+  if (url.startsWith('../')) return IMAGE_BASE_URL + url.replace(/^\.\.\//, '');
+  if (url.startsWith('/')) return IMAGE_BASE_URL + url.slice(1);
   return '';
 }
 
