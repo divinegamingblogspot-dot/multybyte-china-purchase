@@ -2,6 +2,9 @@ name: Sync China Purchase Data
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'data.json'
   schedule:
     - cron: '*/5 * * * *'
 
@@ -10,6 +13,9 @@ permissions:
 
 jobs:
   sync:
+    # Apps Script pushes data.json -> this workflow immediately caches the images.
+    # The workflow's own commit is ignored so it cannot loop forever.
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -33,12 +39,11 @@ jobs:
                   try:
                       req = urllib.request.Request(
                           api + '&_=' + str(time.time_ns()),
-                          headers={'User-Agent': 'Multybyte-China-Purchase-Sync/3.0', 'Cache-Control': 'no-cache'}
+                          headers={'User-Agent': 'Multybyte-China-Purchase-Sync/4.0', 'Cache-Control': 'no-cache'}
                       )
                       with urllib.request.urlopen(req, timeout=45) as r:
                           raw = r.read().decode('utf-8-sig').strip()
                       print('API attempt', attempt, 'bytes:', len(raw))
-                      print('API preview:', raw[:200].replace('\n', ' '))
                       if raw.startswith('{'):
                           payload = json.loads(raw)
                       else:
@@ -60,15 +65,18 @@ jobs:
           pathlib.Path('images').mkdir(exist_ok=True)
 
           def clean_url(value):
-              if not value: return ''
+              if not value:
+                  return ''
               value = str(value).strip().replace('\\u0026', '&').replace('&amp;', '&')
-              if value.startswith('//'): value = 'https:' + value
+              if value.startswith('//'):
+                  value = 'https:' + value
               return value if re.match(r'^https?://', value, re.I) else ''
 
           def extension(url, content_type):
               path = url.split('?', 1)[0].lower()
               for ext in ('.webp', '.jpg', '.jpeg', '.png', '.gif'):
-                  if path.endswith(ext): return ext
+                  if path.endswith(ext):
+                      return ext
               ext = mimetypes.guess_extension(content_type.split(';')[0].strip()) if content_type else None
               return ext if ext in ('.webp', '.jpg', '.jpeg', '.png', '.gif') else '.jpg'
 
@@ -86,17 +94,19 @@ jobs:
                           content_type = r.headers.get('Content-Type', '')
                           body = r.read()
                           ext = extension(source_image, content_type)
+
                       image_hash = hashlib.sha256(body).hexdigest()[:20]
                       filename = f'images/{image_hash}{ext}'
                       with open(filename, 'wb') as f:
                           f.write(body)
 
-                      # IMPORTANT: serve images from the same GitHub Pages origin.
-                      # Do not use jsDelivr because it can be slow/unreliable from China.
+                      # Keep every product image on GitHub Pages itself.
+                      # This avoids external CDN dependence, especially in China.
                       p['image'] = './' + filename
                   except Exception as exc:
                       print(f'Image cache failed for {source_image}: {exc}')
-                      # Keep source as a last-resort fallback.
+                      # Do not destroy the image field if the CDN temporarily fails.
+                      # The existing value remains usable as a fallback.
                       p['image'] = source_image
               else:
                   p['image'] = ''
@@ -107,6 +117,7 @@ jobs:
               'updated': payload.get('updated'),
               'data': products
           }
+
           with open('data.json', 'w', encoding='utf-8') as f:
               json.dump(output, f, ensure_ascii=False, separators=(',', ':'))
               f.write('\n')
