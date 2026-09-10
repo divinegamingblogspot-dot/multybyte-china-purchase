@@ -1,5 +1,5 @@
 const DATA_URL = './data.json';
-const AUTO_REFRESH_MS = 60 * 1000;
+const AUTO_REFRESH_MS = 10 * 1000;
 
 let allProducts = [];
 let requestTimer = null;
@@ -158,8 +158,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Check GitHub for new Sheet data automatically every minute.
-// The GitHub Action publishes fresh data approximately every 5 minutes.
+// Check GitHub for new Sheet data automatically every 10 seconds.
+// Apps Script instant push publishes changes immediately; GitHub Actions remains the backup.
 setInterval(() => loadData(false), AUTO_REFRESH_MS);
 
 loadData(true);
