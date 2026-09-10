@@ -33,7 +33,7 @@ jobs:
                   try:
                       req = urllib.request.Request(
                           api + '&_=' + str(time.time_ns()),
-                          headers={'User-Agent': 'Multybyte-China-Purchase-Sync/2.0', 'Cache-Control': 'no-cache'}
+                          headers={'User-Agent': 'Multybyte-China-Purchase-Sync/3.0', 'Cache-Control': 'no-cache'}
                       )
                       with urllib.request.urlopen(req, timeout=45) as r:
                           raw = r.read().decode('utf-8-sig').strip()
@@ -78,26 +78,39 @@ jobs:
               source_image = clean_url(p.get('image'))
               if source_image:
                   try:
-                      image_req = urllib.request.Request(source_image, headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
+                      image_req = urllib.request.Request(
+                          source_image,
+                          headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'}
+                      )
                       with urllib.request.urlopen(image_req, timeout=45) as r:
                           content_type = r.headers.get('Content-Type', '')
                           body = r.read()
                           ext = extension(source_image, content_type)
                       image_hash = hashlib.sha256(body).hexdigest()[:20]
                       filename = f'images/{image_hash}{ext}'
-                      with open(filename, 'wb') as f: f.write(body)
-                      p['image'] = f'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/{filename}'
+                      with open(filename, 'wb') as f:
+                          f.write(body)
+
+                      # IMPORTANT: serve images from the same GitHub Pages origin.
+                      # Do not use jsDelivr because it can be slow/unreliable from China.
+                      p['image'] = './' + filename
                   except Exception as exc:
                       print(f'Image cache failed for {source_image}: {exc}')
+                      # Keep source as a last-resort fallback.
                       p['image'] = source_image
               else:
                   p['image'] = ''
               products.append(p)
 
-          output = {'success': True, 'updated': payload.get('updated'), 'data': products}
+          output = {
+              'success': True,
+              'updated': payload.get('updated'),
+              'data': products
+          }
           with open('data.json', 'w', encoding='utf-8') as f:
               json.dump(output, f, ensure_ascii=False, separators=(',', ':'))
               f.write('\n')
+
           print('SYNC SUCCESS - Sheet updated:', payload.get('updated'), '- Products:', len(products))
           PY
 
@@ -110,5 +123,5 @@ jobs:
             echo 'No changes to publish.'
             exit 0
           fi
-          git commit -m 'Auto-sync China purchase data'
+          git commit -m 'Auto-sync China purchase data and local images'
           git push
