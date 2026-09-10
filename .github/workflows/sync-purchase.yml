@@ -11,10 +11,15 @@ on:
 permissions:
   contents: write
 
+# Never run two sync jobs at the same time.
+concurrency:
+  group: china-purchase-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
-    # Apps Script pushes data.json -> this workflow immediately caches the images.
-    # The workflow's own commit is ignored so it cannot loop forever.
+    # A data.json push from Apps Script must run immediately.
+    # Ignore only commits created by this workflow itself.
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
@@ -24,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch purchase data and cache images
+      - name: Sync data and cache images
         env:
           API_URL: https://script.google.com/macros/s/AKfycbwDHq7TB9vSxTlSeG9i55HyuhPzAP8oryRWdLsKhPZVHQubgdIAs8CJ7sknQTJLmabj/exec?action=data
         run: |
@@ -33,26 +38,32 @@ jobs:
 
           api = os.environ['API_URL']
 
+          def parse_payload(raw):
+              raw = raw.decode('utf-8-sig').strip() if isinstance(raw, bytes) else raw.strip()
+              if raw.startswith('{'):
+                  return json.loads(raw)
+              start, end = raw.find('('), raw.rfind(')')
+              if start < 0 or end <= start:
+                  raise RuntimeError('Apps Script did not return valid JSON/JSONP')
+              return json.loads(raw[start + 1:end])
+
           def fetch_api():
               last_error = None
               for attempt in range(1, 6):
                   try:
                       req = urllib.request.Request(
                           api + '&_=' + str(time.time_ns()),
-                          headers={'User-Agent': 'Multybyte-China-Purchase-Sync/4.0', 'Cache-Control': 'no-cache'}
+                          headers={
+                              'User-Agent': 'Multybyte-China-Purchase-Sync/5.0',
+                              'Cache-Control': 'no-cache',
+                              'Pragma': 'no-cache'
+                          }
                       )
                       with urllib.request.urlopen(req, timeout=45) as r:
-                          raw = r.read().decode('utf-8-sig').strip()
-                      print('API attempt', attempt, 'bytes:', len(raw))
-                      if raw.startswith('{'):
-                          payload = json.loads(raw)
-                      else:
-                          start, end = raw.find('('), raw.rfind(')')
-                          if start < 0 or end <= start:
-                              raise RuntimeError('Apps Script did not return valid JSON/JSONP')
-                          payload = json.loads(raw[start + 1:end])
+                          payload = parse_payload(r.read())
                       if not payload.get('success') or not isinstance(payload.get('data'), list):
                           raise RuntimeError('Invalid purchase data returned by Apps Script')
+                      print('API sync successful on attempt', attempt, '- products:', len(payload['data']))
                       return payload
                   except Exception as exc:
                       last_error = exc
@@ -61,7 +72,36 @@ jobs:
                           time.sleep(attempt * 3)
               raise RuntimeError(f'Apps Script API failed after 5 attempts: {last_error}')
 
-          payload = fetch_api()
+          # IMPORTANT:
+          # - push event = Apps Script already wrote data.json, so use that exact data.
+          # - schedule/manual = refresh from Apps Script API.
+          # This removes the old race where a push-triggered workflow immediately
+          # re-fetched a slightly older Apps Script response and overwrote new data.
+          event = os.environ.get('GITHUB_EVENT_NAME', '')
+          current = None
+          if pathlib.Path('data.json').exists():
+              try:
+                  with open('data.json', 'r', encoding='utf-8') as f:
+                      current = json.load(f)
+              except Exception:
+                  current = None
+
+          if event == 'push' and current and current.get('success') is True and isinstance(current.get('data'), list):
+              payload = current
+              print('PUSH EVENT: using the already-pushed data.json; no API re-fetch.')
+          else:
+              payload = fetch_api()
+              print('API EVENT: refreshed data.json from Apps Script.')
+
+          # Preserve already-cached local images by SKU if a temporary image fetch fails.
+          old_by_sku = {}
+          if current and isinstance(current.get('data'), list):
+              for item in current['data']:
+                  sku = str(item.get('sku', '')).strip()
+                  image = str(item.get('image', '')).strip()
+                  if sku and image.startswith('./images/'):
+                      old_by_sku[sku] = image
+
           pathlib.Path('images').mkdir(exist_ok=True)
 
           def clean_url(value):
@@ -83,33 +123,45 @@ jobs:
           products = []
           for item in payload['data']:
               p = dict(item)
+              sku = str(p.get('sku', '')).strip()
               source_image = clean_url(p.get('image'))
+
               if source_image:
                   try:
                       image_req = urllib.request.Request(
                           source_image,
-                          headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'}
+                          headers={
+                              'User-Agent': 'Mozilla/5.0',
+                              'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+                              'Cache-Control': 'no-cache'
+                          }
                       )
                       with urllib.request.urlopen(image_req, timeout=45) as r:
                           content_type = r.headers.get('Content-Type', '')
                           body = r.read()
-                          ext = extension(source_image, content_type)
+
+                      if not body:
+                          raise RuntimeError('Image response was empty')
 
                       image_hash = hashlib.sha256(body).hexdigest()[:20]
-                      filename = f'images/{image_hash}{ext}'
+                      filename = f'images/{image_hash}{extension(source_image, content_type)}'
                       with open(filename, 'wb') as f:
                           f.write(body)
 
-                      # Keep every product image on GitHub Pages itself.
-                      # This avoids external CDN dependence, especially in China.
                       p['image'] = './' + filename
+                      print('IMAGE OK:', sku, '->', p['image'])
                   except Exception as exc:
-                      print(f'Image cache failed for {source_image}: {exc}')
-                      # Do not destroy the image field if the CDN temporarily fails.
-                      # The existing value remains usable as a fallback.
-                      p['image'] = source_image
+                      # NEVER replace a known-good GitHub Pages image with an external
+                      # CDN URL. Keep the old local image whenever possible.
+                      if sku in old_by_sku and pathlib.Path(old_by_sku[sku].lstrip('./')).exists():
+                          p['image'] = old_by_sku[sku]
+                          print('IMAGE FALLBACK:', sku, 'kept', p['image'], '-', exc)
+                      else:
+                          p['image'] = source_image
+                          print('IMAGE NO CACHE:', sku, '-', exc)
               else:
-                  p['image'] = ''
+                  p['image'] = old_by_sku.get(sku, '')
+
               products.append(p)
 
           output = {
@@ -122,10 +174,10 @@ jobs:
               json.dump(output, f, ensure_ascii=False, separators=(',', ':'))
               f.write('\n')
 
-          print('SYNC SUCCESS - Sheet updated:', payload.get('updated'), '- Products:', len(products))
+          print('SYNC SUCCESS - updated:', payload.get('updated'), '- products:', len(products))
           PY
 
-      - name: Commit updated data
+      - name: Commit updated data and images
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
