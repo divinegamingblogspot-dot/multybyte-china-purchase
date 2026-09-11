@@ -2,6 +2,11 @@ const DATA_URL = 'https://raw.githubusercontent.com/divinegamingblogspot-dot/mul
 const IMAGE_BASE_URL = 'https://cdn.jsdelivr.net/gh/divinegamingblogspot-dot/multybyte-china-purchase@main/';
 const AUTO_REFRESH_MS = 10 * 1000;
 
+// Authentication backend will be connected here in the next stage.
+// Never put real vendor passwords in this file or in GitHub Pages.
+const AUTH_API_URL = '';
+const PREVIEW_MODE = new URLSearchParams(location.search).get('preview') === '1';
+
 let allProducts = [];
 let requestTimer = null;
 let lastUpdated = '';
@@ -13,6 +18,75 @@ function setState(name, show) {
   $(name).classList.toggle('hidden', !show);
 }
 
+function showPortal(vendorName = 'Preview') {
+  setState('loginView', false);
+  setState('portalView', true);
+  setState('refreshBtn', true);
+  setState('logoutBtn', true);
+  setState('vendorBadge', true);
+  $('vendorBadge').textContent = vendorName;
+  loadData(true);
+}
+
+function showLogin() {
+  setState('loginView', true);
+  setState('portalView', false);
+  setState('refreshBtn', false);
+  setState('logoutBtn', false);
+  setState('vendorBadge', false);
+  $('vendorBadge').textContent = '';
+}
+
+async function authenticate(vendorId, password) {
+  if (!AUTH_API_URL) {
+    throw new Error('Authentication backend is not connected yet.');
+  }
+
+  const response = await fetch(AUTH_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vendorId, password })
+  });
+
+  if (!response.ok) throw new Error('Authentication server error.');
+  const result = await response.json();
+  if (!result.success) throw new Error(result.message || 'Invalid vendor ID or password.');
+  return result;
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  const vendorId = $('vendorId').value.trim();
+  const password = $('vendorPassword').value;
+  const error = $('loginError');
+
+  error.classList.add('hidden');
+  if (!vendorId || !password) return;
+
+  try {
+    const result = await authenticate(vendorId, password);
+    localStorage.setItem('vendorSession', JSON.stringify({
+      token: result.token,
+      vendorId: result.vendorId || vendorId,
+      vendorName: result.vendorName || vendorId
+    }));
+    showPortal(result.vendorName || vendorId);
+  } catch (err) {
+    error.textContent = err.message;
+    error.classList.remove('hidden');
+  }
+}
+
+function logout() {
+  localStorage.removeItem('vendorSession');
+  allProducts = [];
+  lastUpdated = '';
+  $('products').replaceChildren();
+  $('vendorId').value = '';
+  $('vendorPassword').value = '';
+  showLogin();
+}
+
 async function loadData(showLoading = true) {
   if (loading) return;
   loading = true;
@@ -21,30 +95,30 @@ async function loadData(showLoading = true) {
     setState('loading', true);
     setState('error', false);
     setState('empty', false);
-    $('statusText').textContent = 'Checking latest purchase data…';
+    $('statusText').textContent = 'Checking latest product data…';
   }
 
   try {
     const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
-    const response = await fetch(DATA_URL + '?v=' + cacheBust, {
-      cache: 'no-store'
-    });
+    const response = await fetch(DATA_URL + '?v=' + cacheBust, { cache: 'no-store' });
     if (!response.ok) throw new Error('Data server returned HTTP ' + response.status);
 
     const data = await response.json();
     if (!data || data.success !== true || !Array.isArray(data.data)) {
-      throw new Error('Invalid purchase data');
+      throw new Error('Invalid product data');
     }
 
     const incomingUpdated = data.updated || '';
     const changed = incomingUpdated !== lastUpdated || allProducts.length === 0;
 
     if (changed) {
-      allProducts = data.data.map(p => ({
-        ...p,
-        productLink: normalizeUrl(p.productLink),
-        image: normalizeImageUrl(p.image)
-      }));
+      allProducts = data.data
+        .filter(p => p && (p.sku || p.productName || p.productLink))
+        .map(p => ({
+          ...p,
+          productLink: normalizeUrl(p.productLink),
+          image: normalizeImageUrl(p.image)
+        }));
       lastUpdated = incomingUpdated;
       render();
     }
@@ -58,10 +132,10 @@ async function loadData(showLoading = true) {
     setState('error', false);
     loading = false;
   } catch (error) {
-    console.error('China purchase data load failed:', error);
+    console.error('Vendor portal data load failed:', error);
     loading = false;
     if (showLoading || allProducts.length === 0) {
-      showError('Could not load the China purchase data. Try Refresh again.');
+      showError('Could not load the product data. Try Refresh again.');
     }
   }
 }
@@ -96,7 +170,7 @@ function showError(message) {
 function render() {
   const query = $('searchInput').value.trim().toLowerCase();
   const filtered = allProducts.filter(p => {
-    const text = [p.sku, p.productName, p.supplier, p.quantity].join(' ').toLowerCase();
+    const text = [p.sku, p.productName, p.supplier, p.quantity, p.price, p.rmbPrice, p.remarks].join(' ').toLowerCase();
     return !query || text.includes(query);
   });
 
@@ -108,16 +182,13 @@ function render() {
     const node = template.content.cloneNode(true);
     const imageWrap = node.querySelector('.image-wrap');
     const img = node.querySelector('.product-image');
-    const sku = node.querySelector('.sku');
-    const name = node.querySelector('.product-name');
-    const quantity = node.querySelector('.quantity');
-    const supplier = node.querySelector('.supplier');
-    const link = node.querySelector('.product-link');
 
-    sku.textContent = p.sku || 'NO SKU';
-    name.textContent = p.productName || 'Product information unavailable';
-    quantity.textContent = p.quantity || '—';
-    supplier.textContent = p.supplier || '—';
+    node.querySelector('.sku').textContent = p.sku || 'NO SKU';
+    node.querySelector('.product-name').textContent = p.productName || 'Product information unavailable';
+    node.querySelector('.quantity').textContent = p.quantity || '—';
+    node.querySelector('.supplier').textContent = p.supplier || '—';
+    node.querySelector('.price').textContent = p.price ?? p.rmbPrice ?? p.RMBPrice ?? '—';
+    node.querySelector('.remarks').textContent = p.remarks ?? p.remark ?? '—';
 
     if (p.image) {
       const separator = p.image.includes('?') ? '&' : '?';
@@ -133,10 +204,9 @@ function render() {
       imageWrap.classList.add('no-photo');
     }
 
+    const link = node.querySelector('.product-link');
     if (p.productLink) {
       link.href = p.productLink;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
       link.textContent = 'Open Product';
     } else {
       link.removeAttribute('href');
@@ -149,28 +219,32 @@ function render() {
 }
 
 function dataVersion(p) {
-  return [p.sku, p.productName, p.quantity, p.supplier, p.productLink, p.image].join('|');
+  return [p.sku, p.productName, p.quantity, p.supplier, p.productLink, p.image, p.price, p.remarks].join('|');
 }
 
+$('loginForm').addEventListener('submit', handleLogin);
+$('logoutBtn').addEventListener('click', logout);
 $('searchInput').addEventListener('input', () => {
   clearTimeout(requestTimer);
   requestTimer = setTimeout(render, 80);
 });
-
 $('clearBtn').addEventListener('click', () => {
   $('searchInput').value = '';
   render();
   $('searchInput').focus();
 });
-
 $('refreshBtn').addEventListener('click', () => loadData(true));
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
-setInterval(() => loadData(false), AUTO_REFRESH_MS);
+setInterval(() => {
+  if (!$('portalView').classList.contains('hidden')) loadData(false);
+}, AUTO_REFRESH_MS);
 
-loadData(true);
+if (PREVIEW_MODE) {
+  showPortal('Preview Mode');
+} else {
+  showLogin();
+}
