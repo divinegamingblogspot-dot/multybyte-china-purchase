@@ -4,38 +4,60 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111827">
-  <meta name="description" content="Multybyte China Purchase">
+  <meta name="description" content="Multybyte Vendor Portal">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
-  <title>Multybyte China Purchase</title>
+  <title>Multybyte Vendor Portal</title>
 </head>
 <body>
   <header class="topbar">
     <div>
       <div class="brand">MULTYBYTE</div>
-      <div class="subtitle">China Purchase</div>
+      <div class="subtitle">Vendor Portal</div>
     </div>
-    <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh">↻</button>
+    <div class="top-actions">
+      <span id="vendorBadge" class="vendor-badge hidden"></span>
+      <button id="logoutBtn" class="icon-btn hidden" type="button" aria-label="Log out">↪</button>
+      <button id="refreshBtn" class="icon-btn hidden" type="button" aria-label="Refresh">↻</button>
+    </div>
   </header>
 
   <main class="container">
-    <section class="hero">
-      <div>
-        <h1>Purchase List</h1>
-        <p id="statusText">Connecting to purchase data…</p>
+    <section id="loginView" class="login-view">
+      <div class="login-card">
+        <div class="login-logo">MB</div>
+        <h1>Vendor Portal</h1>
+        <p>Sign in to access your assigned products.</p>
+        <form id="loginForm" autocomplete="on">
+          <label for="vendorId">Vendor ID</label>
+          <input id="vendorId" name="username" type="text" autocomplete="username" placeholder="Enter vendor ID" required>
+          <label for="vendorPassword">Password</label>
+          <input id="vendorPassword" name="password" type="password" autocomplete="current-password" placeholder="Enter password" required>
+          <button class="primary-btn" type="submit">Sign in</button>
+          <div id="loginError" class="form-error hidden"></div>
+        </form>
       </div>
-      <div class="count" id="countBadge">0 items</div>
     </section>
 
-    <section class="search-box">
-      <input id="searchInput" type="search" placeholder="Search SKU, product or supplier…" autocomplete="off">
-      <button id="clearBtn" type="button">Clear</button>
-    </section>
+    <section id="portalView" class="hidden">
+      <section class="hero">
+        <div>
+          <h1>Products</h1>
+          <p id="statusText">Connecting to product data…</p>
+        </div>
+        <div class="count" id="countBadge">0 items</div>
+      </section>
 
-    <section id="loading" class="state">Loading products…</section>
-    <section id="error" class="state error hidden"></section>
-    <section id="empty" class="state hidden">No matching products found.</section>
-    <section id="products" class="products"></section>
+      <section class="search-box">
+        <input id="searchInput" type="search" placeholder="Search SKU, product or supplier…" autocomplete="off">
+        <button id="clearBtn" type="button">Clear</button>
+      </section>
+
+      <section id="loading" class="state">Loading products…</section>
+      <section id="error" class="state error hidden"></section>
+      <section id="empty" class="state hidden">No matching products found.</section>
+      <section id="products" class="products"></section>
+    </section>
   </main>
 
   <template id="productTemplate">
@@ -50,8 +72,10 @@
         <div class="details">
           <div><span>Quantity</span><strong class="quantity">—</strong></div>
           <div><span>Supplier</span><strong class="supplier">—</strong></div>
+          <div><span>RMB Price</span><strong class="price">—</strong></div>
+          <div><span>Remarks</span><strong class="remarks">—</strong></div>
         </div>
-        <a class="product-link" target="_blank" rel="noopener noreferrer">Open product</a>
+        <a class="product-link" target="_blank" rel="noopener noreferrer">Open Product</a>
       </div>
     </article>
   </template>
