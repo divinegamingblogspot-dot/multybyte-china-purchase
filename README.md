@@ -1,32 +1,39 @@
-# Multybyte China Purchase
+# Multybyte Vendor Portal
 
-Mobile-friendly purchase dashboard for China suppliers/employees.
+Generic vendor product portal for Multybyte.
 
-## Architecture
+## Current architecture
 
-Google Sheet → Google Apps Script API → GitHub Pages PWA
+Google Sheet → Apps Script/data sync → GitHub Pages → Vendor Portal
 
-The frontend reads the purchase data through the deployed Apps Script endpoint. Users do not need direct access to the Google Sheet.
+The frontend is designed to show vendor-assigned product data with images, quantity, supplier, RMB price, remarks and product links.
 
-## Sheet columns
+## Portal structure
 
-A SKU  
-B Product Name  
-C Quantity  
-D Supplier Name  
-E Product link  
-F Image
+- Vendor login
+- Vendor-specific dashboard
+- Search/filter products
+- Product images
+- Quantity
+- Supplier
+- RMB price
+- Remarks
+- Product link
+- Refresh/live data updates
+- Logout/session handling
+
+## Security
+
+GitHub Pages is only the frontend. Real vendor authentication must be performed by a backend. Vendor passwords must **not** be stored in `app.js`, `data.json`, or any public GitHub file.
+
+The current frontend contains a backend-ready authentication interface. Until the authentication backend is connected, `?preview=1` can be used to preview the existing product dashboard.
 
 ## GitHub Pages
 
 Repository: `divinegamingblogspot-dot/multybyte-china-purchase`
 
-After enabling Pages from **Settings → Pages → Deploy from branch → main → / (root)**, the site will be available at:
+Enable Pages from **Settings → Pages → Deploy from branch → main → / (root)**.
 
-`https://divinegamingblogspot-dot.github.io/multybyte-china-purchase/`
+## Next implementation stage
 
-## Important
-
-The Apps Script endpoint must be deployed as a Web App with **Execute as: Me** and **Who has access: Anyone**. The frontend uses JSONP to reduce browser CORS problems.
-
-The current frontend displays image URLs stored in column F directly. The Apps Script `action=image` endpoint is not used as an `<img>` proxy because Apps Script ContentService does not provide a normal arbitrary binary image response.
+Connect the login API and vendor authorization layer so each vendor receives only the rows assigned to that vendor. The same backend will support admin functions such as creating vendors, changing passwords, enabling/disabling vendors and assigning sheets.
