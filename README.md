@@ -1,58 +1,54 @@
-# Multybyte Vendor Portal
+# Multybyte Universal Partner Portal
 
-Generic vendor management and product portal. The website is intentionally **not China-specific**.
+A generic, reusable partner/vendor portal connected to Google Sheets through Google Apps Script and served from GitHub Pages. It is **not tied to China, purchasing, or any specific supplier type**.
 
-## What is included
+## Included
 
-- Vendor login
-- Admin login
-- Vendor-specific sheet assignment
-- Create/update vendor accounts
-- Enable/disable vendors
-- Change vendor passwords
-- Session persistence in the browser
-- Vendor-only product data
-- SKU, product name, quantity, supplier, price and remarks
-- Product images and product links
-- Search
-- Manual refresh and automatic refresh
-- Responsive desktop/mobile UI
-- Existing GitHub image/data sync remains compatible through `action=data`
+- Secure user login + admin login
+- Each user is assigned to one Google Sheet tab
+- Users only receive rows from their assigned tab
+- Admin can create, edit, enable and disable users
+- Passwords are hashed server-side
+- Session persistence
+- SKU, product name, quantity, supplier, price, remarks, links and images
+- Fast client-side search
+- Lazy-loaded product images
+- Manual refresh + automatic refresh
+- Mobile and desktop responsive UI
+- Existing `action=data` sync compatibility
 
-## Architecture
+## Fast data flow
 
-`Google Sheet → Apps Script backend → GitHub Pages frontend`
+`Google Sheet → Apps Script → short server cache → GitHub Pages`
 
-GitHub Pages is only the public frontend. Passwords and vendor authorization are handled by Apps Script, not by public GitHub files.
+The portal uses a short server-side cache to avoid repeatedly reading the same sheet on every refresh. This makes repeat loads much faster while keeping normal updates nearly real-time. The frontend also avoids unnecessary DOM work and loads product images lazily.
 
-## Backend file
+## Security model
 
-`apps-script/Code.gs` contains the complete vendor-portal backend. It uses the existing spreadsheet:
+GitHub Pages is only the frontend. It does not contain passwords or the full production dataset. The Apps Script backend authenticates the user and returns only the data from the sheet assigned to that session.
+
+## Backend
+
+`apps-script/Code.gs` contains the portal backend configuration and logic. It uses the existing spreadsheet ID:
 
 `1kMUUpS6sRUTvmb5lR0Lav2AGHLlaeETy-H0Jisx7Sn4`
 
-The backend creates/uses a `VENDORS` tab with:
+The `VENDORS` tab contains:
 
-`Vendor ID | Vendor Name | Sheet Name | Enabled | Password Hash`
+`User ID | User Name | Sheet Name | Enabled | Password Hash`
 
-It also keeps the existing `action=data` endpoint for the current GitHub image/data synchronization workflow.
+## Important integration note
 
-## One-time backend connection
+The existing spreadsheet project already contains image-sync/data-sync code. Do **not** blindly delete that existing Apps Script project. Integrate the portal backend into the existing project and make its existing `doGet(e)` route portal actions (`login`, `vendorData`, `adminVendors`, `saveVendor`, `logout`) while preserving the existing `action=data` behavior.
 
-The only part GitHub cannot perform on its own is publishing the Apps Script code into the user's Google Apps Script deployment. Put `apps-script/Code.gs` into the existing Apps Script project that already powers the spreadsheet, preserving the existing image-sync functions and routing the existing `doGet(e)` to the portal actions (`login`, `vendorData`, `adminVendors`, `saveVendor`, `logout`) while keeping `action=data`.
+Run `setupVendorPortal()` once after integration. It creates the `VENDORS` tab and configures the admin account. Use `resetAdminPassword()` to change the admin password later.
 
-Then deploy/update the Web App using the same endpoint configured in `app.js`.
-
-Run `setupVendorPortal()` once from Apps Script. It creates the `VENDORS` tab and asks for the Admin ID/password. Run `resetAdminPassword()` later to change the admin password.
-
-For the Web App, use the normal Apps Script web-app deployment with the script executing under the owner account and public access enabled as required by the frontend. Google documents that web-app deployments have an explicit access/execute-as configuration. citeturn0search3
+Deploy/update the Apps Script Web App and keep the deployed URL the same as the `AUTH_API_URL` in `app.js`.
 
 ## Preview
 
-Before backend authentication is connected, open the GitHub Pages site with `?preview=1` to preview the product dashboard using the existing synced `data.json`.
+Add `?preview=1` to the GitHub Pages URL to preview the product interface using `data.json`. Preview mode is for testing only and is not the production access-control mechanism.
 
 ## GitHub Pages
 
-Repository: `divinegamingblogspot-dot/multybyte-china-purchase`
-
-Enable Pages from **Settings → Pages → Deploy from branch → main → / (root)**.
+Enable GitHub Pages from **Settings → Pages → Deploy from branch → main → / (root)**.
