@@ -1,10 +1,10 @@
 {
-  "name": "Multybyte China Purchase",
-  "short_name": "China Purchase",
+  "name": "Multybyte Quantum Partner Portal",
+  "short_name": "MB Partner",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f3f4f6",
-  "theme_color": "#111827",
-  "description": "Multybyte purchase list for China",
+  "background_color": "#040711",
+  "theme_color": "#040711",
+  "description": "Secure vendor-scoped Multybyte purchase intelligence portal",
   "icons": []
 }
