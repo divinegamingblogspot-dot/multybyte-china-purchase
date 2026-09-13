@@ -2,9 +2,19 @@
   "name": "Multybyte Quantum Partner Portal",
   "short_name": "MB Partner",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#040711",
   "theme_color": "#040711",
   "description": "Secure vendor-scoped Multybyte purchase intelligence portal",
-  "icons": []
+  "prefer_related_applications": false,
+  "icons": [
+    {"src":"icon-192.svg","sizes":"192x192","type":"image/svg+xml","purpose":"any maskable"},
+    {"src":"icon-512.svg","sizes":"512x512","type":"image/svg+xml","purpose":"any maskable"}
+  ],
+  "shortcuts": [
+    {"name":"Open products","short_name":"Products","url":"./?view=products"},
+    {"name":"Command center","short_name":"Commands","url":"./?view=commands"}
+  ]
 }
