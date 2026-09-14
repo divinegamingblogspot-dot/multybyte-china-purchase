@@ -17,7 +17,7 @@ jobs:
       - name: Syntax check portal scripts
         run: |
           set -e
-          for f in app.js admin-products.js admin-enhancements.js portal-upgrades.js login-side-ultra.js procurement-upgrades.js selected-pdf-ui.js preview-bridge.js procurement-command-center.js; do
+          for f in app.js admin-products.js admin-enhancements.js portal-upgrades.js login-side-ultra.js procurement-upgrades.js executive-dashboard.js selected-pdf-ui.js preview-bridge.js procurement-command-center.js; do
             echo "Checking $f"
             node --check "$f"
           done
