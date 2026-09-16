@@ -1,4 +1,4 @@
-const AUTH_API_URL='https://script.google.com/macros/s/AKfycbwDHq7TB9vSxTlSeG9i55HyuhPzAP8oryRWdLsKhPZVHQubgdIAs8CJ7sknQTJLmabj/exec';
+const AUTH_API_URL='https://script.google.com/macros/s/AKfycbxc49T5iqv7V5XvZZciOyaW6a4_CGhjy6hjuxVwHehE8bOX8SGlTL-RJnbC4xpafWWx/exec';
 const PREVIEW_MODE=new URLSearchParams(location.search).get('preview')==='1';
 const AUTO_REFRESH_MS=15000,REQUEST_TIMEOUT_MS=60000,SESSION_KEY='mb_vendor_session',CACHE_KEY='mb_portal_cache',FAV_KEY='mb_favorites',RECENT_KEY='mb_recent';
 let allProducts=[],lastUpdated='',loading=false,requestTimer=null,loginMode='vendor',dense=false,viewMode='grid',smartFilter='all',sessionStarted=Date.now(),deferredInstall=null;

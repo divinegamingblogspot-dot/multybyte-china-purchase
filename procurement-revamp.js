@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-const API='https://script.google.com/macros/s/AKfycbwDHq7TB9vSxTlSeG9i55HyuhPzAP8oryRWdLsKhPZVHQubgdIAs8CJ7sknQTJLmabj/exec';
+const API='https://script.google.com/macros/s/AKfycbxc49T5iqv7V5XvZZciOyaW6a4_CGhjy6hjuxVwHehE8bOX8SGlTL-RJnbC4xpafWWx/exec';
 const $=id=>document.getElementById(id);
 const session=()=>{try{return JSON.parse(localStorage.getItem('mb_vendor_session')||'null')}catch(e){return null}};
 const esc=x=>String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
