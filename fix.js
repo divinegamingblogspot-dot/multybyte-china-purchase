@@ -1,5 +1,5 @@
 (function(){
-  const REAL_API=window.__MB_API||'https://script.google.com/macros/s/AKfycbwCGKZiV57bzmcr5W2aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
+  const REAL_API=window.__MB_API||'https://script.googleusercontent.com/a/macros/multybyte.com/echo?user_content_key=AUkAhnSs6EU6NuyAkMrkmbUGKApbBQSes58LtJOlTXZyKo_ecgi2bFkc31umMbhk3TFm16HgE1l5JPYJXfkGwSTc7iPeTLlXHpp3D-utxGF-yzZTy7PsbWjEku0mmI6ArULkdOTW9TbEl2VSdGbnn47cCAuFYrK8i-q4UA55ZEAmTVxU0CuPfw0UY5uCJXYm0J9ag4izEZNn-pLSiT2cs55W4JOwckx1yiEQTvMl-zadgkSBo91uxvIbU_NMc9q39UOoUxuosjeWKtT2FEOnkltB26iOogP2TdeRisUBiOxHx1JtJRLKpU8&lib=MEfmAo0m0Y1CC85Zg2IB7BWdJHcgl-QcZ';
   let queue=Promise.resolve();
   function raw(p,timeout){
     return new Promise((resolve,reject)=>{
@@ -16,7 +16,7 @@
       const q=new URLSearchParams();
       Object.keys(p||{}).forEach(k=>{if(p[k]!==undefined&&p[k]!==null)q.set(k,String(p[k]))});
       q.set('callback',cb);q.set('_mb',String(Date.now())+'_'+Math.random());
-      s.src=REAL_API+'?'+q.toString();
+      s.src=REAL_API+(REAL_API.includes('?')?'&':'?')+q.toString();
       document.head.appendChild(s);
     });
   }
