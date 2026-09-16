@@ -1,4 +1,4 @@
-const API='https://script.google.com/macros/s/AKfycbxc49T5iqv7V5XvZZciOyaW6a4_CGhjy6hjuxvWHehE8bOX8SGlTL-RJnbC4xpafWWx/exec';
+const API='https://script.google.com/macros/s/AKfycbwCGKZiV57bzmspcr5W2aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
 const $=id=>document.getElementById(id),hide=id=>$(id)?.classList.add('hidden'),show=id=>$(id)?.classList.remove('hidden');
 let products=[],lastUpdated='',busy=false;
 function jsonp(params){return new Promise((resolve,reject)=>{const cb='mb_'+Date.now()+'_'+Math.random().toString(36).slice(2),s=document.createElement('script');let done=false;const timer=setTimeout(()=>finish(reject,new Error('Website Listing gateway timed out.')),30000);function finish(fn,v){if(done)return;done=true;clearTimeout(timer);delete window[cb];s.remove();fn(v)}window[cb]=v=>finish(resolve,v);s.onerror=()=>finish(reject,new Error('Website Listing gateway is unavailable. Check the Apps Script deployment.'));s.async=true;s.src=API+'?'+new URLSearchParams({...params,callback:cb,_:Date.now()});document.head.appendChild(s)})}
@@ -12,7 +12,7 @@ function norm(p){
   const supplier=keyValue(p,['supplier','supplier name','Supplier Name'])??p?.BQ??values[68]??'';
   const price=keyValue(p,['landing cost','landingCost','landing_cost','price'])??p?.AA??values[26]??'';
   const status=keyValue(p,['Admin Panel Status','admin panel status','status','Status','product status','productStatus','product_status','activeStatus'])??p?.L??p?.l??values[11]??'';
-  const productLink=keyValue(p,['product link','productLink','product_link','link','url'])??p?.I??values[8]??'';
+  const productLink=keyValue(p,['product link','productLink','product_link','link','url','Multybyte Link'])??p?.I??values[8]??'';
   const image=keyValue(p,['image','image url','imageUrl','image_url','product image','productImage','product_image'])??'';
   return {...p,sku:String(sku).trim(),productName:String(productName).trim(),supplier:String(supplier).trim(),price,quantity:p?.quantity??'',remarks:p?.remarks??'',status:String(status).trim(),productLink:cleanUrl(productLink),image:cleanUrl(image)}
 }
