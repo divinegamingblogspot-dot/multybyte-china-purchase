@@ -29,7 +29,6 @@ GitHub Pages is only the frontend. It does not contain passwords or the full pro
 
 ## Backend
 
-`apps-script/Code.gs` contains the portal backend configuration and logic. It uses the existing spreadsheet ID:
 
 `1kMUUpS6sRUTvmb5lR0Lav2AGHLlaeETy-H0Jisx7Sn4`
 
@@ -47,7 +46,6 @@ Deploy/update the Apps Script Web App and keep the deployed URL the same as the 
 
 ## Preview
 
-Add `?preview=1` to the GitHub Pages URL to preview the product interface using `data.json`. Preview mode is for testing only and is not the production access-control mechanism.
 
 ## GitHub Pages
 
