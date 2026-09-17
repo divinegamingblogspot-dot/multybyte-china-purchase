@@ -23,6 +23,4 @@ window.__MB_PROC_RENDER=mode=>{if(mode==='po'){applyPOEdits();setTimeout(()=>{ad
 function install(){stabilizeNavigation();hookLoaders();ensureVendorSearch();addPOSearch();applyPOEdits();addPOEditButtons();setTimeout(()=>{hookLoaders();ensureVendorSearch();addPOSearch();addPOEditButtons()},500)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,900));else setTimeout(install,900);
 })();
-
-/* Load the additive V2 layer after the existing hotfix has finished registering. */
-(function(){var s=document.createElement('script');s.src='procurement-v2.js?v=20260917-v2';s.defer=true;document.head.appendChild(s);})();
+(function(){var a=document.createElement('script');a.src='procurement-v2.js?v=20260917-v2';a.defer=true;document.head.appendChild(a);var b=document.createElement('script');b.src='procurement-v3.js?v=20260917-v3';b.defer=true;document.head.appendChild(b);})();
