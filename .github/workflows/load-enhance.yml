@@ -19,7 +19,8 @@ jobs:
           s=p.read_text(encoding='utf-8')
           tags=[
               '<script src="enhance.js?v=image-vendor-pdf-1" defer></script>',
-              '<script src="procurement-pro.js?v=1" defer></script>'
+              '<script src="procurement-pro.js?v=1" defer></script>',
+              '<script src="procurement-hotfix.js?v=1" defer></script>'
           ]
           for tag in tags:
               if tag not in s:
@@ -31,4 +32,4 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git diff --cached --quiet || (git commit -m 'Load portal enhancement scripts' && git push)
+          git diff --cached --quiet || (git commit -m 'Load procurement hotfix' && git push)
