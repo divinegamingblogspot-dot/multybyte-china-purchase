@@ -26,7 +26,8 @@
   async function resolveImage(p){
     if(!p || p.image || !p.productLink) return p;
     try{
-      const r=await window.api({action:'resolveImage',url:p.productLink,image:'',sku:p.sku},30000);
+      // Current backend exposes the image resolver as action=image.
+      const r=await window.api({action:'image',url:p.productLink,sku:p.sku},30000);
       if(r && r.success && r.image) p.image=r.image;
     }catch(e){}
     return p;
