@@ -1,12 +1,28 @@
 /* MULTYBYTE PORTAL — GATEWAY + ADMIN/VENDOR/PDF FIX */
 (function(){'use strict';
-const API='https://script.google.com/macros/s/AKfycbwCGKZiV57bzmcrW5aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
+const CANONICAL_API='https://script.google.com/macros/s/AKfycbwCGKZiV57bzmcrW5aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
+/* Keep one canonical gateway URL. Older app.js builds used a typo in the deployment ID; normalize it here before any request is made. */
+const LEGACY_BAD_API='https://script.google.com/macros/s/AKfycbwCGKZiV57bzmcr5W2aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
+const API=CANONICAL_API;
+window.__MB_CANONICAL_API=CANONICAL_API;
+try{
+  const desc=Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype,'src');
+  if(desc&&desc.set&&desc.get&&!window.__MB_SCRIPT_GATEWAY_SHIELD){
+    Object.defineProperty(HTMLScriptElement.prototype,'src',{configurable:desc.configurable,enumerable:desc.enumerable,get:desc.get,set:function(v){
+      const s=String(v||'');
+      desc.set.call(this,s===LEGACY_BAD_API?CANONICAL_API:s);
+    }});
+    window.__MB_SCRIPT_GATEWAY_SHIELD=true;
+  }
+}catch(e){}
 const BOOK='mb_bookmarks_v3',HEART='mb_hearts_v3',CACHE='mb_listing_cache_v3',IMGCACHE='mb_image_cache_v3';
 const escp=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function get(k){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}function put(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function say(x){if(typeof toast==='function')toast(x);else console.log(x)}
 function apiSafe(p,timeout){timeout=timeout||30000;return new Promise((resolve,reject)=>{let n=0,done=false,sc,t;function go(){n++;const cb='mbsafe_'+Date.now()+'_'+Math.random().toString(36).slice(2),q=new URLSearchParams({...p,callback:cb,_ts:Date.now(),_retry:n});const clean=()=>{clearTimeout(t);try{delete window[cb]}catch(e){}if(sc)sc.remove()};const finish=(ok,v)=>{if(done)return;done=true;clean();ok?resolve(v):reject(v)};window[cb]=v=>finish(true,v);sc=document.createElement('script');sc.async=true;sc.src=API+'?'+q;sc.onload=()=>{};sc.onerror=()=>n<4?(clean(),setTimeout(go,400*n)):finish(false,new Error('Gateway unavailable'));document.head.appendChild(sc);t=setTimeout(()=>n<4?(clean(),setTimeout(go,300*n)):finish(false,new Error('Gateway timeout')),timeout)}go()})}
 window.__MB_GATEWAY=apiSafe;
+/* Replace the app's original global api() with the hardened implementation. This fixes login and every legacy action, not only the newer wrappers. */
+window.api=apiSafe;
 function norm(p){return typeof normalizeProduct==='function'?normalizeProduct(p):p}function arr(r){return (r?.data||r?.products||[]).map(norm).filter(x=>x&&x.sku)}
 function product(sku){let a=[];try{a=a.concat(products||[])}catch(e){}try{a=a.concat(masterProducts||[])}catch(e){}return a.find(p=>String(p?.sku||'').toLowerCase()===String(sku||'').toLowerCase())||null}
 async function loadPOFixed(){try{const r=await apiSafe({action:'purchaseOrders',token:token()});if(!r?.success)throw Error(r?.message||'Purchase orders failed');pos=r.purchaseOrders||r.data||[];if(typeof drawPO==='function')drawPO('adminPO',pos);if(typeof drawDashboard==='function')drawDashboard();return r}catch(e){say('Purchase orders failed: '+e.message)}}
