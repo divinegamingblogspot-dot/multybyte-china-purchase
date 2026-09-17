@@ -1,0 +1,50 @@
+name: Repair portal app syntax
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Repair malformed esc helper
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app.js')
+          s = p.read_text(encoding='utf-8')
+          lines = s.splitlines()
+          replacement = "function esc(x){return String(x??'').replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]})}"
+          changed = False
+          for i, line in enumerate(lines):
+              if line.startswith('function esc(x){'):
+                  if line != replacement:
+                      lines[i] = replacement
+                      changed = True
+                  break
+          if changed:
+              p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print('changed=', changed)
+          PY
+          node --check app.js
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          if git diff --quiet -- app.js; then
+            echo "No repair needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js
+          git commit -m "Fix portal app.js syntax"
+          git push
