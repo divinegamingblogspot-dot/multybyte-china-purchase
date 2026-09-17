@@ -6,7 +6,7 @@ The Apps Script gateway is a protected core dependency.
 
 There is exactly one allowed frontend Apps Script Web App endpoint:
 
-`https://script.google.com/macros/s/AKfycbwCGKZiV57bzmspcr5W2aVF5R7SpbwEqCs911boTjbkPYvFEZJ-QNL0iD42qrxXfT9/exec`
+`https://script.google.com/macros/s/AKfycbwCGKZiV57bzmspcr5W2aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec`
 
 This exact `/exec` URL is the production endpoint supplied by the deployed Apps Script Web App. Do not alter, regenerate, shorten, or replace it during feature work.
 
