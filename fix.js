@@ -1,14 +1,36 @@
 /* MULTYBYTE — PROTECTED GATEWAY CORE
- * SINGLE SOURCE OF TRUTH:
- * All portal requests must reach this exact deployed Apps Script URL.
- * Feature code must never introduce or replace an Apps Script endpoint.
+ * SINGLE SOURCE OF TRUTH: one deployed Apps Script endpoint.
+ * This file is loaded after app.js, so it also protects legacy transport code.
  */
 (function(){'use strict';
 const CANONICAL='https://script.google.com/macros/s/AKfycbwCGKZiV57bzmspcr5W2aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
 try{Object.defineProperty(window,'__MB_CANONICAL_API',{value:CANONICAL,writable:false,configurable:false,enumerable:true})}catch(e){window.__MB_CANONICAL_API=CANONICAL}
-window.__MB_GATEWAY_VERSION='protected-v3';window.__MB_GATEWAY_URL=CANONICAL;
+window.__MB_GATEWAY_VERSION='protected-v4';window.__MB_GATEWAY_URL=CANONICAL;
+
+/* Protect old app.js JSONP calls: rewrite every Apps Script /exec request to
+   the canonical deployment. Also remove app.js's 800ms onload false-failure;
+   the real timeout below is allowed to decide whether the request failed. */
 const nativeAppendChild=Node.prototype.appendChild;
-Node.prototype.appendChild=function(node){try{if(node&&node.tagName==='SCRIPT'&&typeof node.src==='string'&&node.src.indexOf('script.google.com/macros/s/')!==-1){const u=new URL(node.src);if(u.pathname.endsWith('/exec')&&u.toString().indexOf(CANONICAL)===-1){const target=new URL(CANONICAL);u.searchParams.forEach((v,k)=>target.searchParams.set(k,v));node.src=target.toString()}}}catch(e){}return nativeAppendChild.call(this,node)};
+Node.prototype.appendChild=function(node){
+  try{
+    if(node&&node.tagName==='SCRIPT'&&typeof node.src==='string'&&node.src.indexOf('script.google.com/macros/s/')!==-1){
+      const original=node.src;
+      const u=new URL(original);
+      if(u.pathname.endsWith('/exec')){
+        const target=new URL(CANONICAL);
+        u.searchParams.forEach((v,k)=>target.searchParams.set(k,v));
+        const changed=u.origin!==target.origin||u.pathname!==target.pathname;
+        node.src=target.toString();
+        if(changed){
+          node.onload=null;
+          node.onerror=null;
+        }
+      }
+    }
+  }catch(e){}
+  return nativeAppendChild.call(this,node);
+};
+
 const $=id=>document.getElementById(id);
 function session(){try{return JSON.parse(localStorage.getItem('mb_vendor_session')||'null')}catch(e){return null}}
 function token(){return session()?.token||''}
