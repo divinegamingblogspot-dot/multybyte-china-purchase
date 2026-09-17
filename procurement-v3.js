@@ -33,4 +33,4 @@ function decorate(){const bar=$('adminProductsSection')?.querySelector('.adminTo
 function boot(){decorate();sync();setInterval(()=>{if(S())sync()},60000);setInterval(()=>{renderBell();if($('workspaceDashboard')&&!$('workspaceDashboard').classList.contains('hidden'))renderDashboard()},15000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,1100));else setTimeout(boot,1100);
 })();
-(function(){var s=document.createElement('script');s.src='safe-addons.js?v=20260917-1';s.defer=true;document.head.appendChild(s);})();
+(function(){var s=document.createElement('script');s.src='safe-addons.js?v=20260917-2';s.defer=true;document.head.appendChild(s);var m=document.createElement('script');m.src='manifest-loader.js?v=20260917-1';m.defer=true;document.head.appendChild(m);})();
