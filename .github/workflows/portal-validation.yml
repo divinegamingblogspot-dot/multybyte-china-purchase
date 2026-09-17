@@ -21,3 +21,4 @@ jobs:
             echo "Checking $f"
             node --check "$f"
           done
+# Validation retrigger after app.js syntax repair
