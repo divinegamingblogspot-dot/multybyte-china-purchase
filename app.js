@@ -1,4 +1,5 @@
-const API='https://script.google.com/macros/s/AKfycbwCGKZiV57bzmcrW5aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
+window.__MB_CANONICAL_API=window.__MB_CANONICAL_API||'https://script.google.com/macros/s/AKfycbwCGKZiV57bzmcrW5aVF5R7SpbwEqCs911boTjJbkPYvFEZJ-QNL0iD42qrxXfT9/exec';
+const API=window.__MB_CANONICAL_API;
 const $=id=>document.getElementById(id);
 let products=[],masterProducts=[],vendors=[],pos=[],loginRole='vendor',selected=new Set(),poItems=[];
 const KEY='mb_vendor_session',LOG_KEY='mb_activity_log_v1';
