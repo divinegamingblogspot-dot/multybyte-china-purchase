@@ -26,7 +26,6 @@
   async function resolveImage(p){
     if(!p || p.image || !p.productLink) return p;
     try{
-      // Current backend exposes the image resolver as action=image.
       const r=await window.api({action:'image',url:p.productLink,sku:p.sku},30000);
       if(r && r.success && r.image) p.image=r.image;
     }catch(e){}
@@ -34,7 +33,8 @@
   }
 
   function getCardsAndHydrate(){
-    document.querySelectorAll('.card').forEach(function(card){
+    const cards=[...document.querySelectorAll('.card')];
+    const hydrateCard=function(card){
       const img=card.querySelector('.photo img');
       if(img && img.getAttribute('src')) return;
       const checkbox=card.querySelector('.selectProduct');
@@ -48,15 +48,19 @@
         const photo=card.querySelector('.photo');
         if(photo)photo.innerHTML='<img loading="lazy" src="'+String(x.image).replace(/"/g,'&quot;')+'" alt="Product image">';
       });
-    });
+    };
+    if('IntersectionObserver' in window){
+      const io=new IntersectionObserver(function(entries,obs){
+        entries.forEach(function(entry){if(entry.isIntersecting){hydrateCard(entry.target);obs.unobserve(entry.target)}});
+      },{rootMargin:'500px'});
+      cards.forEach(function(card){io.observe(card)});
+    }else{
+      cards.slice(0,30).forEach(hydrateCard);
+    }
   }
 
   async function hydrateList(list){
     window.__mbProductSnapshot=list||[];
-    const a=(list||[]).filter(function(p){return p && !p.image && p.productLink});
-    let i=0;
-    async function worker(){while(i<a.length){await resolveImage(a[i++])}}
-    await Promise.all(Array.from({length:Math.min(5,a.length)},worker));
     getCardsAndHydrate();
   }
 
