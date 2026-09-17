@@ -23,4 +23,4 @@ window.__MB_PROC_RENDER=mode=>{if(mode==='po'){applyPOEdits();setTimeout(()=>{ad
 function install(){stabilizeNavigation();hookLoaders();ensureVendorSearch();addPOSearch();applyPOEdits();addPOEditButtons();setTimeout(()=>{hookLoaders();ensureVendorSearch();addPOSearch();addPOEditButtons()},500)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,900));else setTimeout(install,900);
 })();
-(function(){var a=document.createElement('script');a.src='procurement-v2.js?v=20260917-v2';a.defer=true;document.head.appendChild(a);var b=document.createElement('script');b.src='procurement-v3.js?v=20260917-v3';b.defer=true;document.head.appendChild(b);})();
+(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='procurement-v2.css?v=20260917';document.head.appendChild(l);var a=document.createElement('script');a.src='procurement-v2.js?v=20260917-v2';a.defer=true;document.head.appendChild(a);var b=document.createElement('script');b.src='procurement-v3.js?v=20260917-v3';b.defer=true;document.head.appendChild(b);})();
