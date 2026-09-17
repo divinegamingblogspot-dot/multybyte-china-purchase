@@ -5,7 +5,7 @@ let products=[],masterProducts=[],vendors=[],pos=[],loginRole='vendor',selected=
 const KEY='mb_vendor_session',LOG_KEY='mb_activity_log_v1';
 function session(){try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}}
 function token(){return session()?.token||''}
-function esc(x){return String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'})[c]}
+function esc(x){return String(x??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function activity(level,action,message,meta){try{const rows=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');rows.unshift({time:new Date().toISOString(),level:String(level||'INFO').toUpperCase(),action:String(action||''),message:String(message||''),meta:meta||{},user:session()?.id||'guest'});rows.splice(500);localStorage.setItem(LOG_KEY,JSON.stringify(rows));}catch(e){}}
 function readActivity(){try{return JSON.parse(localStorage.getItem(LOG_KEY)||'[]')}catch(e){return[]}}
 function toast(m){const t=$('toast');if(!t)return;t.textContent=m;t.classList.remove('hidden');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.add('hidden'),3500)}
