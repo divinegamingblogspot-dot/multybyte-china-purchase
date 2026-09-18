@@ -58,17 +58,21 @@ async function ensurePOVendorAccount(v){
   return {...v,id,masterOnly:false};
 }
 async function createPOFixed(){
-  const vs=typeof selectedPOVendors==='function'?selectedPOVendors():[];
+  let vs=typeof selectedPOVendors==='function'?selectedPOVendors():[];
   if(!vs.length)return toastSafe('Select at least one vendor.');
   if(!(window.poItems||[]).length)return toastSafe('Add at least one SKU.');
   const b=$('poCreate');if(b)b.disabled=true;
   try{
+    const accounts=Array.isArray(window.__MB_STATE_VENDORS)?window.__MB_STATE_VENDORS:[];
     for(const raw of vs){
-      const v=await ensurePOVendorAccount(raw);
-      const r=await gateway({action:'savePurchaseOrder',token:token(),vendorId:v.id,vendorName:v.name,items:JSON.stringify((window.poItems||[]).map(p=>({sku:p.sku,quantity:p.quantity,remarks:p.remarks||''})))});
+      const name=String(raw.name||raw.id||'').trim();
+      let v=accounts.find(x=>String(x.name||'').trim().toLowerCase()===name.toLowerCase()||String(x.id||'').trim().toLowerCase()===String(raw.id||'').trim().toLowerCase())||raw;
+      if(v.masterOnly){v=await ensurePOVendorAccount(v)}
+      if(!v?.id||!v?.name)throw Error('Vendor not available. Please refresh the vendor list and select the vendor again.');
+      const r=await gateway({action:'savePurchaseOrder',token:token(),vendorId:v.id,vendorName:v.name,items:JSON.stringify((window.poItems||[]).map(p=>({sku:p.sku,productName:p.productName,supplier:p.supplier,landingCost:p.landingCost??p.price,price:p.price??p.landingCost,quantity:p.quantity,remarks:p.remarks||'',productLink:p.productLink,image:p.image||''})))});
       if(!r?.success)throw Error(r?.message||'Purchase order failed');
     }
-    toastSafe('Purchase order created successfully.');
+    toastSafe('Purchase order created and saved successfully.');
     if(typeof closePO==='function')closePO();
     await loadPOFixed();
   }catch(e){toastSafe(e.message)}finally{if(b)b.disabled=false}
