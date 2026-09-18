@@ -45,6 +45,10 @@ function saveVendor_(p){
   return{success:true,message:row?'Vendor updated successfully.':'Vendor created successfully.',vendor:{id,name,sheetName,enabled}};
 }
 function savePurchaseOrder_(p){
+  if(String(p.deletePO||'').toLowerCase()==='true'||String(p.action||'').toLowerCase()==='deletepo'){
+    if(!getSession_(p.token,'admin'))return{success:false,message:'Admin session expired.',code:'ADMIN_SESSION'};
+    return mbDeletePurchaseOrder_(p);
+  }
   const s=getSession_(p.token,'admin');
   if(!s)return{success:false,message:'Admin session expired.',code:'ADMIN_SESSION'};
   let items=[];try{items=p.items?JSON.parse(String(p.items)):null}catch(e){return{success:false,message:'Invalid PO items.'}}
@@ -56,4 +60,73 @@ function savePurchaseOrder_(p){
   items.forEach(it=>{const z=map[String(it.sku||'').trim().toLowerCase()];if(!z)throw Error('SKU not found in Website Listing: '+it.sku);const img=String(it.image||z.image||findImage_(z.productLink)||''),qty=String(it.quantity||'').trim(),rem=String(it.remarks||'').trim();vr.push([z.sku,z.productName,qty,z.supplier,z.productLink,img,z.landingCost,rem,poId,now,'CREATED']);pr.push([poId,now,s.id,vendor.id,vendor.name,z.sku,z.productName,z.supplier,z.landingCost,qty,rem,z.productLink,img,'CREATED'])});
   vsh.getRange(vsh.getLastRow()+1,1,vr.length,MB_PORTAL.VENDOR_PRODUCT_HEADERS.length).setValues(vr);psh.getRange(psh.getLastRow()+1,1,pr.length,14).setValues(pr);
   return{success:true,message:vr.length+' purchase item'+(vr.length===1?'':'s')+' saved.',poId,vendor,items:vr.map(r=>({sku:r[0],productName:r[1],quantity:r[2],supplier:r[3],productLink:r[4],image:r[5],price:r[6],landingCost:r[6],remarks:r[7]})),savedAt:now.toISOString()};
+}
+
+function mbDefaultVendorId_(name){
+  const base=mbVendorNorm_(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'vendor';
+  return 'vendor-'+base;
+}
+function mbDefaultVendorPassword_(id){
+  return 'MB@'+String(id||'vendor').replace(/[^A-Za-z0-9]/g,'').slice(-24)+'#1';
+}
+function mbListingVendorNames_(){
+  const x=readMasterRows_(), out=[], seen={};
+  x.rows.forEach((r,i)=>{
+    const z=normalizeMasterProduct_(r,i+2,x.m);
+    const n=String(z.vendor||z.vendorName||z.supplier||z.supplierName||'').trim();
+    const k=mbVendorNorm_(n);
+    if(n&&k&&!seen[k]){seen[k]=1;out.push(n)}
+  });
+  return out;
+}
+function mbEnsureListingVendorAccounts_(){
+  const ss=SpreadsheetApp.openById(MB_PORTAL.SPREADSHEET_ID);
+  const sh=ensureSheet_(ss,MB_PORTAL.VENDOR_SHEET,MB_PORTAL.VENDOR_HEADERS);
+  const rows=sh.getLastRow()>1?sh.getRange(2,1,sh.getLastRow()-1,5).getValues():[];
+  const existing={};
+  rows.forEach(r=>[r[0],r[1],r[2]].forEach(v=>{const k=mbVendorNorm_(v);if(k)existing[k]=1}));
+  const created=[];
+  mbListingVendorNames_().forEach(name=>{
+    const nk=mbVendorNorm_(name);
+    if(existing[nk])return;
+    let id=mbDefaultVendorId_(name), n=2;
+    while(existing[mbVendorNorm_(id)])id=mbDefaultVendorId_(name)+'-'+n++;
+    const password=mbDefaultVendorPassword_(id);
+    const sheetName=uniqueVendorSheetName_(ss,name,id);
+    ensureVendorSheet_(ss,sheetName);
+    sh.appendRow([id,name,sheetName,true,hash_(password)]);
+    existing[nk]=1; existing[mbVendorNorm_(id)]=1; existing[mbVendorNorm_(sheetName)]=1;
+    created.push({id,name,sheetName,enabled:true,autoCreated:true,defaultPassword:password});
+  });
+  return created;
+}
+function adminVendors_(){
+  if(!getSession_(arguments[0]?.token,'admin')&&arguments[0])return{success:false,message:'Admin session expired.'};
+  const p=arguments[0]||{};
+  mbEnsureListingVendorAccounts_();
+  const ss=SpreadsheetApp.openById(MB_PORTAL.SPREADSHEET_ID),sh=ss.getSheetByName(MB_PORTAL.VENDOR_SHEET);
+  if(!sh||sh.getLastRow()<2)return{success:true,vendors:[],created:[]};
+  const rows=sh.getRange(2,1,sh.getLastRow()-1,5).getValues();
+  return{success:true,vendors:rows.map(r=>{const v=mbVendorRecord_(r);v.defaultPassword=mbDefaultVendorPassword_(v.id);return v}),created:[]};
+}
+function mbDeletePurchaseOrder_(p){
+  const poId=String(p.poId||p.id||'').trim();
+  if(!poId)return{success:false,message:'PO ID is required.'};
+  const ss=SpreadsheetApp.openById(MB_PORTAL.SPREADSHEET_ID);
+  const psh=ss.getSheetByName(MB_PORTAL.PO_SHEET);
+  let removed=0;
+  if(psh&&psh.getLastRow()>1){
+    const rows=psh.getRange(2,1,psh.getLastRow()-1,Math.max(14,psh.getLastColumn())).getValues();
+    for(let i=rows.length-1;i>=0;i--)if(String(rows[i][0]||'').trim()===poId){psh.deleteRow(i+2);removed++}
+  }
+  const sheets=ss.getSheets();
+  sheets.forEach(sh=>{
+    if(sh.getName()===MB_PORTAL.PO_SHEET||sh.getName()===MB_PORTAL.VENDOR_SHEET||sh.getName()===MB_PORTAL.MASTER_SHEET)return;
+    const lr=sh.getLastRow(),lc=sh.getLastColumn();if(lr<2||!lc)return;
+    const vals=sh.getRange(2,1,lr-1,Math.max(11,lc)).getValues();
+    for(let i=vals.length-1;i>=0;i--){
+      if(String(vals[i][8]||'').trim()===poId){sh.deleteRow(i+2);removed++}
+    }
+  });
+  return{success:true,message:removed+' PO record row'+(removed===1?'':'s')+' deleted.',poId};
 }
