@@ -52,7 +52,7 @@ function mbEnsurePOVendorRemarkColumn_(sh){
   if(idx<0){sh.getRange(1,15).setValue('Vendor Remark');idx=14}
   return idx+1;
 }
-function savePurchaseOrder_(p){
+function mbSavePurchaseOrderOverride_(p){
   if(String(p.deletePO||'').toLowerCase()==='true'||String(p.action||'').toLowerCase()==='deletepo'){
     if(!getSession_(p.token,'admin'))return{success:false,message:'Admin session expired.',code:'ADMIN_SESSION'};
     return mbDeletePurchaseOrder_(p);
