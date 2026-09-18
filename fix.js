@@ -46,16 +46,41 @@ function esc(x){return String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function renderPOVendorsFixed(){const box=vendorBox();if(!box)return;const list=vendorListForPO();window.__MB_STATE_VENDORS=list;try{window.eval('vendors=window.__MB_STATE_VENDORS;')}catch(e){}if(!list.length){box.innerHTML='<div class="state" style="padding:18px">No vendors available.</div>';return}box.innerHTML=list.map(v=>'<label style="display:flex;align-items:center;gap:9px;padding:8px 0;cursor:pointer"><input class="poVendorCheck" type="checkbox" value="'+esc(v.id)+'" data-name="'+esc(v.name)+'"><span><b>'+esc(v.name)+'</b>'+(v.masterOnly?' <small style="color:var(--muted)">(Listing vendor)</small>':'')+'</span></label>').join('')}
 async function loadVendorsFixed(){try{const r=await gateway({action:'adminVendors',token:token()});const accounts=arr(r,['vendors','data','users']).map(normalizeVendorSafe);const master=await gateway({action:'data',token:token()});const masterData=arr(master,['data','products']).map(normalizeProductSafe);window.__MB_STATE_VENDORS=accounts;window.__MB_STATE_MASTER=masterData;try{if(typeof window.mergeMasterVendors==='function')window.mergeMasterVendors({success:true,data:masterData,products:masterData})}catch(e){}renderPOVendorsFixed();if(typeof drawDashboard==='function')drawDashboard();return r}catch(e){toastSafe('Vendors failed: '+e.message);renderPOVendorsFixed()}}
 async function addSkuFixed(){const sku=$('poSku')?.value.trim();if(!sku)return;try{let r=await gateway({action:'purchaseLookup',token:token(),sku});let p=r?.success?normalizeProductSafe(r.product||r.data):null;if(!p?.sku){const s=await gateway({action:'searchListing',token:token(),query:sku});const a=arr(s,['data','products','results']);const exact=a.find(x=>String(x?.sku??x?.SKU??x?.SKU_ID??x?.['SKU']??'').trim().toLowerCase()===sku.toLowerCase());if(exact)p=normalizeProductSafe(exact)}if(!p?.sku)throw Error(r?.message||'SKU not found in Website Listing');window.poItems=Array.isArray(window.poItems)?window.poItems:[];if(window.poItems.some(x=>String(x.sku).toLowerCase()===String(p.sku).toLowerCase()))throw Error('SKU already added');window.poItems.push({...p,quantity:1});try{window.eval('poItems=window.poItems;')}catch(e){}$('poSku').value='';if(typeof renderPOItems==='function')renderPOItems();if($('poLookup'))$('poLookup').textContent='Added '+(p.productName||p.sku);const target=String(p.vendor||p.supplier||'').trim().toLowerCase();if(target)document.querySelectorAll('.poVendorCheck').forEach(c=>{if(String(c.dataset.name||'').trim().toLowerCase()===target)c.checked=true})}catch(e){toastSafe(e.message)}}
-async function openPOFixed(){if(session()?.role!=='admin')return;window.poItems=[];try{window.eval('poItems=window.poItems')}catch(e){}const modal=$('poModal')||document.querySelector('.modal');if(modal)modal.classList.remove('hidden');renderPOVendorsFixed();if(typeof renderPOItems==='function')renderPOItems();await loadVendorsFixed();renderPOVendorsFixed()}
+async function openPOFixed(){
+  if(session()?.role!=='admin')return;
+  if(window.__MB_PO_OPENING)return;
+  window.__MB_PO_OPENING=true;
+  try{
+    window.poItems=[];
+    try{window.eval('poItems=window.poItems')}catch(e){}
+    const modal=$('poModal')||document.querySelector('.modal');
+    if(modal)modal.classList.remove('hidden');
+    renderPOVendorsFixed();
+    if(typeof renderPOItems==='function')renderPOItems();
+    await loadVendorsFixed();
+    renderPOVendorsFixed();
+  }finally{window.__MB_PO_OPENING=false}
+}
 async function ensurePOVendorAccount(v){
   if(!v||!v.name)return v;
-  if(!v.masterOnly)return v;
-  const base=String(v.name).trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'vendor';
+  const wanted=String(v.name||'').trim();
+  const accounts=Array.isArray(window.__MB_STATE_VENDORS)?window.__MB_STATE_VENDORS:[];
+  const existing=accounts.find(x=>String(x?.name||'').trim().toLowerCase()===wanted.toLowerCase());
+  if(existing&&existing.id)return {...existing,masterOnly:false};
+
+  const base=wanted.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'vendor';
   let id='vendor-'+base;
   const pw='MB@'+id.replace(/[^A-Za-z0-9]/g,'').slice(-24)+'#1';
-  const r=await gateway({action:'saveVendor',token:token(),id,name:v.name,password:pw,enabled:'true'});
-  if(!r?.success)throw Error(r?.message||('Could not create vendor account for '+v.name));
-  return {...v,id,masterOnly:false};
+  const saved=await gateway({action:'saveVendor',token:token(),id,name:wanted,password:pw,enabled:'true'});
+  if(!saved?.success)throw Error(saved?.message||('Could not create vendor account for '+wanted));
+
+  // Never trust the synthetic client-side ID. Re-read the authoritative VENDORS sheet.
+  const fresh=await gateway({action:'adminVendors',token:token()});
+  const list=arr(fresh,['vendors','data','users']).map(normalizeVendorSafe);
+  const real=list.find(x=>String(x?.name||'').trim().toLowerCase()===wanted.toLowerCase());
+  if(!real?.id)throw Error('Vendor account was created but could not be reloaded from VENDORS.');
+  window.__MB_STATE_VENDORS=list;
+  return {...real,masterOnly:false};
 }
 async function createPOFixed(){
   let vs=typeof selectedPOVendors==='function'?selectedPOVendors():[];
@@ -66,10 +91,24 @@ async function createPOFixed(){
     const accounts=Array.isArray(window.__MB_STATE_VENDORS)?window.__MB_STATE_VENDORS:[];
     for(const raw of vs){
       const name=String(raw.name||raw.id||'').trim();
-      let v=accounts.find(x=>String(x.name||'').trim().toLowerCase()===name.toLowerCase()||String(x.id||'').trim().toLowerCase()===String(raw.id||'').trim().toLowerCase())||raw;
-      if(v.masterOnly){v=await ensurePOVendorAccount(v)}
+      let v=accounts.find(x=>String(x?.name||'').trim().toLowerCase()===name.toLowerCase())
+        ||accounts.find(x=>String(x?.id||'').trim().toLowerCase()===String(raw.id||'').trim().toLowerCase())
+        ||raw;
+      if(!v?.id||v.masterOnly)v=await ensurePOVendorAccount(v);
       if(!v?.id||!v?.name)throw Error('Vendor not available. Please refresh the vendor list and select the vendor again.');
-      const r=await gateway({action:'savePurchaseOrder',token:token(),vendorId:v.id,vendorName:v.name,items:JSON.stringify((window.poItems||[]).map(p=>({sku:p.sku,productName:p.productName,supplier:p.supplier,landingCost:p.landingCost??p.price,price:p.price??p.landingCost,quantity:p.quantity,remarks:p.remarks||'',productLink:p.productLink,image:p.image||''})))});
+
+      const r=await gateway({
+        action:'savePurchaseOrder',
+        token:token(),
+        vendorId:v.id,
+        vendorName:v.name,
+        items:JSON.stringify((window.poItems||[]).map(p=>({
+          sku:p.sku,productName:p.productName,supplier:p.supplier,
+          landingCost:p.landingCost??p.price,price:p.price??p.landingCost,
+          quantity:p.quantity,remarks:p.remarks||'',
+          productLink:p.productLink,image:p.image||''
+        })))
+      });
       if(!r?.success)throw Error(r?.message||'Purchase order failed');
     }
     toastSafe('Purchase order created and saved successfully.');
