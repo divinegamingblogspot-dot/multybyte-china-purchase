@@ -47,9 +47,61 @@ function renderPOVendorsFixed(){const box=vendorBox();if(!box)return;const list=
 async function loadVendorsFixed(){try{const r=await gateway({action:'adminVendors',token:token()});const accounts=arr(r,['vendors','data','users']).map(normalizeVendorSafe);const master=await gateway({action:'data',token:token()});const masterData=arr(master,['data','products']).map(normalizeProductSafe);window.__MB_STATE_VENDORS=accounts;window.__MB_STATE_MASTER=masterData;try{if(typeof window.mergeMasterVendors==='function')window.mergeMasterVendors({success:true,data:masterData,products:masterData})}catch(e){}renderPOVendorsFixed();if(typeof drawDashboard==='function')drawDashboard();return r}catch(e){toastSafe('Vendors failed: '+e.message);renderPOVendorsFixed()}}
 async function addSkuFixed(){const sku=$('poSku')?.value.trim();if(!sku)return;try{let r=await gateway({action:'purchaseLookup',token:token(),sku});let p=r?.success?normalizeProductSafe(r.product||r.data):null;if(!p?.sku){const s=await gateway({action:'searchListing',token:token(),query:sku});const a=arr(s,['data','products','results']);const exact=a.find(x=>String(x?.sku??x?.SKU??x?.SKU_ID??x?.['SKU']??'').trim().toLowerCase()===sku.toLowerCase());if(exact)p=normalizeProductSafe(exact)}if(!p?.sku)throw Error(r?.message||'SKU not found in Website Listing');window.poItems=Array.isArray(window.poItems)?window.poItems:[];if(window.poItems.some(x=>String(x.sku).toLowerCase()===String(p.sku).toLowerCase()))throw Error('SKU already added');window.poItems.push({...p,quantity:1});try{window.eval('poItems=window.poItems;')}catch(e){}$('poSku').value='';if(typeof renderPOItems==='function')renderPOItems();if($('poLookup'))$('poLookup').textContent='Added '+(p.productName||p.sku);const target=String(p.vendor||p.supplier||'').trim().toLowerCase();if(target)document.querySelectorAll('.poVendorCheck').forEach(c=>{if(String(c.dataset.name||'').trim().toLowerCase()===target)c.checked=true})}catch(e){toastSafe(e.message)}}
 async function openPOFixed(){if(session()?.role!=='admin')return;window.poItems=[];try{window.eval('poItems=window.poItems')}catch(e){}const modal=$('poModal')||document.querySelector('.modal');if(modal)modal.classList.remove('hidden');renderPOVendorsFixed();if(typeof renderPOItems==='function')renderPOItems();await loadVendorsFixed();renderPOVendorsFixed()}
-async function createPOFixed(){const vs=typeof selectedPOVendors==='function'?selectedPOVendors():[];if(!vs.length)return toastSafe('Select at least one vendor.');if(!(window.poItems||[]).length)return toastSafe('Add at least one SKU.');const b=$('poCreate');if(b)b.disabled=true;try{for(const v of vs){const r=await gateway({action:'savePurchaseOrder',token:token(),vendorId:v.id,vendorName:v.name,items:JSON.stringify((window.poItems||[]).map(p=>({sku:p.sku,quantity:p.quantity,remarks:p.remarks||''})))});if(!r?.success)throw Error(r?.message||'Purchase order failed')}toastSafe('Purchase order created successfully.');if(typeof closePO==='function')closePO();await loadPOFixed()}catch(e){toastSafe(e.message)}finally{if(b)b.disabled=false}}
+async function ensurePOVendorAccount(v){
+  if(!v||!v.name)return v;
+  if(!v.masterOnly)return v;
+  const base=String(v.name).trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'vendor';
+  let id='vendor-'+base;
+  const pw='MB@'+id.replace(/[^A-Za-z0-9]/g,'').slice(-24)+'#1';
+  const r=await gateway({action:'saveVendor',token:token(),id,name:v.name,password:pw,enabled:'true'});
+  if(!r?.success)throw Error(r?.message||('Could not create vendor account for '+v.name));
+  return {...v,id,masterOnly:false};
+}
+async function createPOFixed(){
+  const vs=typeof selectedPOVendors==='function'?selectedPOVendors():[];
+  if(!vs.length)return toastSafe('Select at least one vendor.');
+  if(!(window.poItems||[]).length)return toastSafe('Add at least one SKU.');
+  const b=$('poCreate');if(b)b.disabled=true;
+  try{
+    for(const raw of vs){
+      const v=await ensurePOVendorAccount(raw);
+      const r=await gateway({action:'savePurchaseOrder',token:token(),vendorId:v.id,vendorName:v.name,items:JSON.stringify((window.poItems||[]).map(p=>({sku:p.sku,quantity:p.quantity,remarks:p.remarks||''})))});
+      if(!r?.success)throw Error(r?.message||'Purchase order failed');
+    }
+    toastSafe('Purchase order created successfully.');
+    if(typeof closePO==='function')closePO();
+    await loadPOFixed();
+  }catch(e){toastSafe(e.message)}finally{if(b)b.disabled=false}
+}
 function openPortalFixed(r){$('loginScreen')?.classList.add('hidden');$('portal')?.classList.remove('hidden');const admin=r?.role==='admin';if($('welcome'))$('welcome').textContent=admin?'Administrator Dashboard':'Welcome, '+(r?.name||r?.id||'Vendor');if($('vendorIdentity'))$('vendorIdentity').textContent=admin?'MASTER ACCESS • PRODUCTS • VENDORS • PURCHASE ORDERS':'VENDOR ACCOUNT • '+(r?.id||'');if($('connection'))$('connection').innerHTML='<i></i>LIVE';document.querySelectorAll('.adminOnly').forEach(x=>x.classList.toggle('hidden',!admin));if(admin)loadAdminFixed();else loadVendorFixed();if(typeof showSection==='function')showSection('dashboard')}
 function bindLogin(){const old=$('loginBtn');if(!old)return;const b=old.cloneNode(true);old.replaceWith(b);b.addEventListener('click',loginSafe);b.addEventListener('keydown',e=>e.key==='Enter'&&loginSafe);const vr=$('vendorRole'),ar=$('adminRole');if(vr){const n=vr.cloneNode(true);vr.replaceWith(n);n.addEventListener('click',()=>{window.__mbLoginRole='vendor';n.classList.add('active');$('adminRole')?.classList.remove('active')})}if(ar){const n=ar.cloneNode(true);ar.replaceWith(n);n.addEventListener('click',()=>{window.__mbLoginRole='admin';n.classList.add('active');$('vendorRole')?.classList.remove('active')})}window.__mbLoginRole='vendor'}
+function openVendorEditorFixed(index){
+  const list=Array.isArray(window.__MB_STATE_VENDORS)?window.__MB_STATE_VENDORS:[];
+  const v=list[Number(index)];
+  if(!v)return;
+  document.getElementById('mbBackendVendorModal')?.remove();
+  const d=document.createElement('div');d.id='mbBackendVendorModal';d.className='modal';
+  const escV=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  d.innerHTML='<div class="modalBox"><div class="sectionTitle"><div><div class="eyebrow">VENDOR ACCOUNT</div><h2 style="margin:4px 0">Edit Vendor</h2></div><button class="btn" data-close>Close</button></div>'+
+  '<div class="profileGrid"><div><label class="eyebrow">VENDOR NAME</label><input id="beVN" class="field" value="'+escV(v.name)+'"></div>'+
+  '<div><label class="eyebrow">LOGIN ID</label><input id="beVI" class="field" value="'+escV(v.id)+'"></div>'+
+  '<div><label class="eyebrow">NEW PASSWORD</label><input id="beVP" type="password" class="field" placeholder="Leave blank to keep current"></div>'+
+  '<div><label class="eyebrow">STATUS</label><select id="beVE" class="field"><option value="true" '+(v.enabled!==false?'selected':'')+'>Active</option><option value="false" '+(v.enabled===false?'selected':'')+'>Disabled</option></select></div></div>'+
+  '<div class="notice">Changes are saved to the VENDORS account system. Website Listing products are not changed.</div>'+
+  '<div class="actions" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="beSave">Save Vendor</button></div></div>';
+  document.body.appendChild(d);
+  d.onclick=e=>{if(e.target===d||e.target.closest('[data-close]'))d.remove()};
+  d.querySelector('#beSave').onclick=async()=>{
+    const name=document.getElementById('beVN').value.trim(),id=document.getElementById('beVI').value.trim(),password=document.getElementById('beVP').value,enabled=document.getElementById('beVE').value==='true';
+    if(!name||!id)return toastSafe('Vendor name and Login ID are required.');
+    const b=document.getElementById('beSave');b.disabled=true;b.textContent='Saving…';
+    try{
+      const r=await gateway({action:'saveVendor',token:token(),id,name,password,enabled,oldId:String(v.id||''),oldName:String(v.name||'')});
+      if(!r?.success)throw Error(r?.message||'Vendor save failed.');
+      d.remove();toastSafe(r.message||'Vendor saved successfully.');await loadVendorsFixed();
+    }catch(e){toastSafe(e.message||'Vendor save failed.')}finally{b.disabled=false;b.textContent='Save Vendor'}
+  };
+}
 function bindVendorSave(){
   window.saveVendor=saveVendorFixed;
   const b=$('saveVendor');
@@ -57,6 +109,6 @@ function bindVendorSave(){
   b.dataset.mbVendorSaveBound='1';
   b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();saveVendorFixed()},true);
 }
-function install(){window.loadAdminFixed=loadAdminFixed;window.loadVendorFixed=loadVendorFixed;window.loadPOFixed=loadPOFixed;window.loadAdmin=loadAdminFixed;window.loadVendor=loadVendorFixed;window.loadPO=loadPOFixed;window.loadVendors=loadVendorsFixed;window.addPOSku=addSkuFixed;window.createPO=createPOFixed;window.openPO=openPOFixed;window.openPortal=openPortalFixed;window.saveVendor=saveVendorFixed;bindLogin();bindVendorSave();setTimeout(bindVendorSave,300);setTimeout(bindVendorSave,1000);const poRefresh=$('adminPORefresh');if(poRefresh){const n=poRefresh.cloneNode(true);poRefresh.replaceWith(n);n.addEventListener('click',loadPOFixed)}const poAdd=$('poAdd');if(poAdd){const n=poAdd.cloneNode(true);poAdd.replaceWith(n);n.addEventListener('click',addSkuFixed)}const poCreate=$('poCreate');if(poCreate){const n=poCreate.cloneNode(true);poCreate.replaceWith(n);n.addEventListener('click',createPOFixed)}const sku=$('poSku');if(sku)sku.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSkuFixed()}});const quick=$('quickCreatePO');if(quick){const n=quick.cloneNode(true);quick.replaceWith(n);n.addEventListener('click',openPOFixed)}const createButtons=document.querySelectorAll('[data-action="create-po"]');createButtons.forEach(b=>{if(b.dataset.mbPoBound)return;b.dataset.mbPoBound='1';b.addEventListener('click',openPOFixed)});document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const text=(b.textContent||'').trim().toLowerCase();if(text.includes('create purchase order')||text==='+ create po'){if(!b.dataset.mbPoBound){b.dataset.mbPoBound='1';e.preventDefault();e.stopImmediatePropagation();openPOFixed()}}},true)}
+function install(){window.loadAdminFixed=loadAdminFixed;window.loadVendorFixed=loadVendorFixed;window.loadPOFixed=loadPOFixed;window.loadAdmin=loadAdminFixed;window.loadVendor=loadVendorFixed;window.loadPO=loadPOFixed;window.loadVendors=loadVendorsFixed;window.addPOSku=addSkuFixed;window.createPO=createPOFixed;window.openPO=openPOFixed;window.openPortal=openPortalFixed;window.saveVendor=saveVendorFixed;window.openVendorEditor=openVendorEditorFixed;bindLogin();bindVendorSave();setTimeout(bindVendorSave,300);setTimeout(bindVendorSave,1000);const poRefresh=$('adminPORefresh');if(poRefresh){const n=poRefresh.cloneNode(true);poRefresh.replaceWith(n);n.addEventListener('click',loadPOFixed)}const poAdd=$('poAdd');if(poAdd){const n=poAdd.cloneNode(true);poAdd.replaceWith(n);n.addEventListener('click',addSkuFixed)}const poCreate=$('poCreate');if(poCreate){const n=poCreate.cloneNode(true);poCreate.replaceWith(n);n.addEventListener('click',createPOFixed)}const sku=$('poSku');if(sku)sku.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSkuFixed()}});const quick=$('quickCreatePO');if(quick){const n=quick.cloneNode(true);quick.replaceWith(n);n.addEventListener('click',openPOFixed)}const createButtons=document.querySelectorAll('[data-action="create-po"]');createButtons.forEach(b=>{if(b.dataset.mbPoBound)return;b.dataset.mbPoBound='1';b.addEventListener('click',openPOFixed)});document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const text=(b.textContent||'').trim().toLowerCase();if(text.includes('create purchase order')||text==='+ create po'){if(!b.dataset.mbPoBound){b.dataset.mbPoBound='1';e.preventDefault();e.stopImmediatePropagation();openPOFixed()}}},true)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
