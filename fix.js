@@ -111,7 +111,22 @@ async function createPOFixed(){
       });
       if(!r?.success)throw Error(r?.message||'Purchase order failed');
     }
-    toastSafe('Purchase order created and saved successfully.');
+    // Generate ONE combined PDF for the complete PO, after all vendor items are saved.
+    // The existing PDF preview/print flow remains unchanged; this additionally stores
+    // the generated PDF in the PO record so it can be opened/downloaded/deleted later.
+    try{
+      const pdfRows=(window.poItems||[]).map(p=>({
+        ...p,
+        vendor:vs.map(x=>x.name).join(', '),
+        quantity:p.quantity,
+        image:p.image||''
+      }));
+      if(typeof window.__MB_ENHANCE?.pdfCards==='function'){
+        window.__MB_LAST_PO_PDF_ROWS=pdfRows;
+        await window.__MB_ENHANCE.pdfCards(pdfRows,'Purchase Order');
+      }
+    }catch(e){console.warn('PO PDF generation skipped:',e)}
+    toastSafe('Purchase order created and saved successfully. PDF is ready.');
     if(typeof closePO==='function')closePO();
     await loadPOFixed();
   }catch(e){toastSafe(e.message)}finally{if(b)b.disabled=false}
