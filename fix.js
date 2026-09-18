@@ -74,6 +74,40 @@ async function createPOFixed(){
   }catch(e){toastSafe(e.message)}finally{if(b)b.disabled=false}
 }
 function openPortalFixed(r){$('loginScreen')?.classList.add('hidden');$('portal')?.classList.remove('hidden');const admin=r?.role==='admin';if($('welcome'))$('welcome').textContent=admin?'Administrator Dashboard':'Welcome, '+(r?.name||r?.id||'Vendor');if($('vendorIdentity'))$('vendorIdentity').textContent=admin?'MASTER ACCESS • PRODUCTS • VENDORS • PURCHASE ORDERS':'VENDOR ACCOUNT • '+(r?.id||'');if($('connection'))$('connection').innerHTML='<i></i>LIVE';document.querySelectorAll('.adminOnly').forEach(x=>x.classList.toggle('hidden',!admin));if(admin)loadAdminFixed();else loadVendorFixed();if(typeof showSection==='function')showSection('dashboard')}
+function mbRemoveLifecycleUI(){
+  const root=document.getElementById('adminPOSection'); if(!root)return;
+  root.querySelectorAll('*').forEach(el=>{
+    const t=(el.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();
+    if(!t)return;
+    if((t.includes('workflow control')&&t.includes('po lifecycle'))||t.includes('po lifecycle')){
+      if(el!==root && el.parentElement)el.remove();
+    }
+  });
+}
+function mbInstallTheme(){
+  const key='mb_portal_theme_v1';
+  const themes={
+    dark:{bg:'#071b1b',bg2:'#0b2524',panel:'#102d2d',panel2:'#123535',white:'#f7fffc',muted:'#91aaa5',line:'#244846',lime:'#b7f34a',teal:'#16e0bd'},
+    light:{bg:'#f4f8f7',bg2:'#eaf1ef',panel:'#ffffff',panel2:'#f3f8f6',white:'#102321',muted:'#58716c',line:'#cbd9d5',lime:'#6a9f16',teal:'#087f70'},
+    midnight:{bg:'#090d1a',bg2:'#11172a',panel:'#151c32',panel2:'#1b2440',white:'#f5f7ff',muted:'#9ba7c2',line:'#303a59',lime:'#9be564',teal:'#65d8ff'},
+    emerald:{bg:'#061914',bg2:'#0a241d',panel:'#0d2b22',panel2:'#12382c',white:'#f3fff9',muted:'#91b5a7',line:'#245444',lime:'#c5f36a',teal:'#35e6ae'}
+  };
+  const apply=name=>{const th=themes[name]||themes.dark;Object.entries(th).forEach(([k,v])=>document.documentElement.style.setProperty('--'+k,v));document.body.dataset.theme=name;document.querySelectorAll('[data-theme-choice]').forEach(b=>{b.classList.toggle('primary',b.dataset.themeChoice===name)});try{localStorage.setItem(key,name)}catch(e){}};
+  let saved='dark';try{saved=localStorage.getItem(key)||'dark'}catch(e){};apply(saved);
+  document.querySelectorAll('[data-theme-choice]').forEach(b=>{if(b.dataset.mbThemeBound)return;b.dataset.mbThemeBound='1';b.addEventListener('click',()=>apply(b.dataset.themeChoice))});
+}
+function mbKeepSession(){
+  try{
+    const raw=localStorage.getItem('mb_vendor_session');
+    if(raw){const s=JSON.parse(raw);if(s&&s.token){localStorage.setItem('mb_vendor_session',JSON.stringify(s))}}
+  }catch(e){}
+}
+function mbWatchPOForLifecycle(){
+  mbRemoveLifecycleUI();
+  if(window.__MB_PO_CLEANUP_OBSERVER)return;
+  const root=document.getElementById('adminPOSection');if(!root)return;
+  const ob=new MutationObserver(()=>mbRemoveLifecycleUI());ob.observe(root,{childList:true,subtree:true});window.__MB_PO_CLEANUP_OBSERVER=ob;
+}
 function bindLogin(){const old=$('loginBtn');if(!old)return;const b=old.cloneNode(true);old.replaceWith(b);b.addEventListener('click',loginSafe);b.addEventListener('keydown',e=>e.key==='Enter'&&loginSafe);const vr=$('vendorRole'),ar=$('adminRole');if(vr){const n=vr.cloneNode(true);vr.replaceWith(n);n.addEventListener('click',()=>{window.__mbLoginRole='vendor';n.classList.add('active');$('adminRole')?.classList.remove('active')})}if(ar){const n=ar.cloneNode(true);ar.replaceWith(n);n.addEventListener('click',()=>{window.__mbLoginRole='admin';n.classList.add('active');$('vendorRole')?.classList.remove('active')})}window.__mbLoginRole='vendor'}
 function openVendorEditorFixed(index){
   const list=Array.isArray(window.__MB_STATE_VENDORS)?window.__MB_STATE_VENDORS:[];
@@ -109,6 +143,6 @@ function bindVendorSave(){
   b.dataset.mbVendorSaveBound='1';
   b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();saveVendorFixed()},true);
 }
-function install(){window.loadAdminFixed=loadAdminFixed;window.loadVendorFixed=loadVendorFixed;window.loadPOFixed=loadPOFixed;window.loadAdmin=loadAdminFixed;window.loadVendor=loadVendorFixed;window.loadPO=loadPOFixed;window.loadVendors=loadVendorsFixed;window.addPOSku=addSkuFixed;window.createPO=createPOFixed;window.openPO=openPOFixed;window.openPortal=openPortalFixed;window.saveVendor=saveVendorFixed;window.openVendorEditor=openVendorEditorFixed;bindLogin();bindVendorSave();setTimeout(bindVendorSave,300);setTimeout(bindVendorSave,1000);const poRefresh=$('adminPORefresh');if(poRefresh){const n=poRefresh.cloneNode(true);poRefresh.replaceWith(n);n.addEventListener('click',loadPOFixed)}const poAdd=$('poAdd');if(poAdd){const n=poAdd.cloneNode(true);poAdd.replaceWith(n);n.addEventListener('click',addSkuFixed)}const poCreate=$('poCreate');if(poCreate){const n=poCreate.cloneNode(true);poCreate.replaceWith(n);n.addEventListener('click',createPOFixed)}const sku=$('poSku');if(sku)sku.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSkuFixed()}});const quick=$('quickCreatePO');if(quick){const n=quick.cloneNode(true);quick.replaceWith(n);n.addEventListener('click',openPOFixed)}const createButtons=document.querySelectorAll('[data-action="create-po"]');createButtons.forEach(b=>{if(b.dataset.mbPoBound)return;b.dataset.mbPoBound='1';b.addEventListener('click',openPOFixed)});document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const text=(b.textContent||'').trim().toLowerCase();if(text.includes('create purchase order')||text==='+ create po'){if(!b.dataset.mbPoBound){b.dataset.mbPoBound='1';e.preventDefault();e.stopImmediatePropagation();openPOFixed()}}},true)}
+function install(){mbInstallTheme();mbKeepSession();mbWatchPOForLifecycle();window.loadAdminFixed=loadAdminFixed;window.loadVendorFixed=loadVendorFixed;window.loadPOFixed=loadPOFixed;window.loadAdmin=loadAdminFixed;window.loadVendor=loadVendorFixed;window.loadPO=loadPOFixed;window.loadVendors=loadVendorsFixed;window.addPOSku=addSkuFixed;window.createPO=createPOFixed;window.openPO=openPOFixed;window.openPortal=openPortalFixed;window.saveVendor=saveVendorFixed;window.openVendorEditor=openVendorEditorFixed;bindLogin();bindVendorSave();setTimeout(bindVendorSave,300);setTimeout(bindVendorSave,1000);const poRefresh=$('adminPORefresh');if(poRefresh){const n=poRefresh.cloneNode(true);poRefresh.replaceWith(n);n.addEventListener('click',loadPOFixed)}const poAdd=$('poAdd');if(poAdd){const n=poAdd.cloneNode(true);poAdd.replaceWith(n);n.addEventListener('click',addSkuFixed)}const poCreate=$('poCreate');if(poCreate){const n=poCreate.cloneNode(true);poCreate.replaceWith(n);n.addEventListener('click',createPOFixed)}const sku=$('poSku');if(sku)sku.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSkuFixed()}});const quick=$('quickCreatePO');if(quick){const n=quick.cloneNode(true);quick.replaceWith(n);n.addEventListener('click',openPOFixed)}const createButtons=document.querySelectorAll('[data-action="create-po"]');createButtons.forEach(b=>{if(b.dataset.mbPoBound)return;b.dataset.mbPoBound='1';b.addEventListener('click',openPOFixed)});document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const text=(b.textContent||'').trim().toLowerCase();if(text.includes('create purchase order')||text==='+ create po'){if(!b.dataset.mbPoBound){b.dataset.mbPoBound='1';e.preventDefault();e.stopImmediatePropagation();openPOFixed()}}},true)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
