@@ -44,6 +44,14 @@ function saveVendor_(p){
   }
   return{success:true,message:row?'Vendor updated successfully.':'Vendor created successfully.',vendor:{id,name,sheetName,enabled}};
 }
+function mbEnsurePOVendorRemarkColumn_(sh){
+  const headers=['PO ID','Created At','Created By','Vendor ID','Vendor Name','SKU','Product Name','Supplier','Landing Cost','Quantity','Remarks','Product Link','Image','Status','Vendor Remark'];
+  if(sh.getLastRow()===0){sh.getRange(1,1,1,headers.length).setValues([headers]);return 15}
+  const h=sh.getRange(1,1,1,Math.max(15,sh.getLastColumn())).getDisplayValues()[0];
+  let idx=h.findIndex(x=>String(x||'').trim().toLowerCase()==='vendor remark');
+  if(idx<0){sh.getRange(1,15).setValue('Vendor Remark');idx=14}
+  return idx+1;
+}
 function savePurchaseOrder_(p){
   if(String(p.deletePO||'').toLowerCase()==='true'||String(p.action||'').toLowerCase()==='deletepo'){
     if(!getSession_(p.token,'admin'))return{success:false,message:'Admin session expired.',code:'ADMIN_SESSION'};
@@ -52,16 +60,36 @@ function savePurchaseOrder_(p){
   const s=getSession_(p.token,'admin');
   if(!s)return{success:false,message:'Admin session expired.',code:'ADMIN_SESSION'};
   let items=[];try{items=p.items?JSON.parse(String(p.items)):null}catch(e){return{success:false,message:'Invalid PO items.'}}
-  if(!Array.isArray(items)||!items.length){if(String(p.sku||'').trim())items=[{sku:p.sku,productName:p.productName,supplier:p.supplier,landingCost:p.landingCost||p.price,quantity:p.quantity,remarks:p.remarks,productLink:p.productLink,image:p.image}];else return{success:false,message:'At least one SKU is required.'}}
-  const vendor=findVendor_(p.vendorId||p.vendorName||p.name||p.id||p.sheetName);
+  if(!Array.isArray(items)||!items.length){
+    if(String(p.sku||'').trim())items=[{sku:p.sku,productName:p.productName,supplier:p.supplier,landingCost:p.landingCost||p.price,price:p.price,quantity:p.quantity,remarks:p.remarks,productLink:p.productLink,image:p.image}];
+    else return{success:false,message:'At least one SKU is required.'}
+  }
+  const vendor=findVendor_(p.vendorId||p.vendorName||p.name||p.id||p.sheetName,p.vendorName||p.name);
   if(!vendor)return{success:false,message:'Select a valid vendor and at least one SKU.'};
-  const x=readMasterRows_(),map={};x.rows.forEach((r,i)=>{const z=normalizeMasterProduct_(r,i+2,x.m);if(z.sku)map[z.sku.toLowerCase()]=z});
-  const ss=SpreadsheetApp.openById(MB_PORTAL.SPREADSHEET_ID),vsh=ensureVendorSheet_(ss,vendor.sheetName),psh=ensureSheet_(ss,MB_PORTAL.PO_SHEET,MB_PORTAL.PO_HEADERS),now=new Date(),poId='PO-'+Utilities.formatDate(now,Session.getScriptTimeZone(),'yyyyMMdd-HHmmss')+'-'+Utilities.getUuid().slice(0,6).toUpperCase(),vr=[],pr=[];
-  items.forEach(it=>{const z=map[String(it.sku||'').trim().toLowerCase()];if(!z)throw Error('SKU not found in Website Listing: '+it.sku);const img=String(it.image||z.image||findImage_(z.productLink)||''),qty=String(it.quantity||'').trim(),rem=String(it.remarks||'').trim();vr.push([z.sku,z.productName,qty,z.supplier,z.productLink,img,z.landingCost,rem,poId,now,'CREATED']);pr.push([poId,now,s.id,vendor.id,vendor.name,z.sku,z.productName,z.supplier,z.landingCost,qty,rem,z.productLink,img,'CREATED'])});
-  vsh.getRange(vsh.getLastRow()+1,1,vr.length,MB_PORTAL.VENDOR_PRODUCT_HEADERS.length).setValues(vr);psh.getRange(psh.getLastRow()+1,1,pr.length,14).setValues(pr);
+  const x=readMasterRows_(),map={};
+  x.rows.forEach((r,i)=>{const z=normalizeMasterProduct_(r,i+2,x.m);if(z.sku)map[z.sku.toLowerCase()]=z});
+  const ss=SpreadsheetApp.openById(MB_PORTAL.SPREADSHEET_ID);
+  const vsh=ensureVendorSheet_(ss,vendor.sheetName);
+  const psh=ensureSheet_(ss,MB_PORTAL.PO_SHEET,MB_PORTAL.PO_HEADERS);
+  mbEnsurePOVendorRemarkColumn_(psh);
+  const now=new Date(),poId='PO-'+Utilities.formatDate(now,Session.getScriptTimeZone(),'yyyyMMdd-HHmmss')+'-'+Utilities.getUuid().slice(0,6).toUpperCase(),vr=[],pr=[];
+  items.forEach(it=>{
+    const z=map[String(it.sku||'').trim().toLowerCase()];
+    if(!z)throw Error('SKU not found in Website Listing: '+it.sku);
+    const name=it.productName===undefined?z.productName:String(it.productName||'').trim();
+    const supplier=it.supplier===undefined?z.supplier:String(it.supplier||'').trim();
+    const link=it.productLink===undefined?z.productLink:String(it.productLink||'').trim();
+    let img=it.image!==undefined?String(it.image||'').trim():String(z.image||'').trim();
+    if(!img&&link)img=String(findImage_(link,true)||'').trim();
+    const price=it.landingCost!==undefined?it.landingCost:(it.price!==undefined?it.price:z.landingCost);
+    const qty=String(it.quantity||'').trim(),rem=String(it.remarks||'').trim();
+    vr.push([z.sku,name,qty,supplier,link,img,price,rem,poId,now,'CREATED']);
+    pr.push([poId,now,s.id,vendor.id,vendor.name,z.sku,name,supplier,price,qty,rem,link,img,'CREATED','']);
+  });
+  vsh.getRange(vsh.getLastRow()+1,1,vr.length,MB_PORTAL.VENDOR_PRODUCT_HEADERS.length).setValues(vr);
+  psh.getRange(psh.getLastRow()+1,1,pr.length,15).setValues(pr);
   return{success:true,message:vr.length+' purchase item'+(vr.length===1?'':'s')+' saved.',poId,vendor,items:vr.map(r=>({sku:r[0],productName:r[1],quantity:r[2],supplier:r[3],productLink:r[4],image:r[5],price:r[6],landingCost:r[6],remarks:r[7]})),savedAt:now.toISOString()};
 }
-
 function mbDefaultVendorId_(name){
   const base=mbVendorNorm_(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'vendor';
   return 'vendor-'+base;
@@ -108,6 +136,25 @@ function adminVendors_(){
   if(!sh||sh.getLastRow()<2)return{success:true,vendors:[],created:[]};
   const rows=sh.getRange(2,1,sh.getLastRow()-1,5).getValues();
   return{success:true,vendors:rows.map(r=>{const v=mbVendorRecord_(r);v.defaultPassword=mbDefaultVendorPassword_(v.id);return v}),created:[]};
+}
+function setVendorPORemark_(p){
+  const s=getSession_(p.token,'vendor');
+  if(!s)return{success:false,message:'Vendor session expired.'};
+  const poId=String(p.poId||'').trim(),remark=String(p.remark||'').trim();
+  if(!poId)return{success:false,message:'PO ID is required.'};
+  const ss=SpreadsheetApp.openById(MB_PORTAL.SPREADSHEET_ID),sh=ss.getSheetByName(MB_PORTAL.PO_SHEET);
+  if(!sh||sh.getLastRow()<2)return{success:false,message:'Purchase order not found.'};
+  mbEnsurePOVendorRemarkColumn_(sh);
+  const rows=sh.getRange(2,1,sh.getLastRow()-1,Math.max(15,sh.getLastColumn())).getValues();
+  let found=false;
+  for(let i=0;i<rows.length;i++){
+    if(String(rows[i][0]||'').trim()===poId&&String(rows[i][3]||'').trim().toLowerCase()===String(s.id||'').trim().toLowerCase()){
+      rows[i][14]=remark;found=true;
+    }
+  }
+  if(!found)return{success:false,message:'PO not found in your vendor account.'};
+  sh.getRange(2,1,rows.length,Math.max(15,sh.getLastColumn())).setValues(rows);
+  return{success:true,message:'PO remark saved.'};
 }
 function mbDeletePurchaseOrder_(p){
   const poId=String(p.poId||p.id||'').trim();
