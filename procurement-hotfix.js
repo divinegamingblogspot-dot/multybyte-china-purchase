@@ -24,3 +24,82 @@ function install(){stabilizeNavigation();hookLoaders();ensureVendorSearch();addP
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,900));else setTimeout(install,900);
 })();
 (function(){var l=document.createElement('link');l.rel='stylesheet';l.href='procurement-v2.css?v=20260917';document.head.appendChild(l);var a=document.createElement('script');a.src='procurement-v2.js?v=20260917-v2';a.defer=true;document.head.appendChild(a);var b=document.createElement('script');b.src='procurement-v3.js?v=20260917-v3';b.defer=true;document.head.appendChild(b);})();
+
+
+(function(){
+'use strict';
+if(window.__MB_VENDOR_PO_ACTIONS__)return;
+window.__MB_VENDOR_PO_ACTIONS__=true;
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
+const session=()=>{try{return JSON.parse(localStorage.getItem('mb_vendor_session')||'null')}catch(e){return null}};
+const token=()=>session()?.token||'';
+const gateway=()=>window.__MB_GATEWAY;
+const toast=x=>window.toast?window.toast(x):alert(x);
+
+function vendorEditBackend(id){
+  const list=window.__MB_STATE_VENDORS||window.vendors||[];
+  const v=list.find(x=>String(x.id||x.name)===String(id));
+  if(!v)return;
+  const old=document.getElementById('mbBackendVendorModal');if(old)old.remove();
+  const d=document.createElement('div');d.id='mbBackendVendorModal';d.className='modal';
+  const defaultPw=v.defaultPassword||('MB@'+String(v.id||'vendor').replace(/[^A-Za-z0-9]/g,'').slice(-24)+'#1');
+  d.innerHTML='<div class="modalBox"><div class="sectionTitle"><div><div class="eyebrow">VENDOR ACCOUNT</div><h2 style="margin:4px 0">Edit Vendor</h2></div><button class="btn" data-close>Close</button></div>'+
+    '<div class="profileGrid">'+
+    '<div><label class="eyebrow">VENDOR NAME</label><input id="beVN" class="field" value="'+esc(v.name)+'"></div>'+
+    '<div><label class="eyebrow">LOGIN ID</label><input id="beVI" class="field" value="'+esc(v.id)+'"></div>'+
+    '<div><label class="eyebrow">NEW PASSWORD</label><input id="beVP" type="password" class="field" placeholder="Leave blank to keep current"></div>'+
+    '<div><label class="eyebrow">STATUS</label><select id="beVE" class="field"><option value="true" '+(v.enabled!==false?'selected':'')+'>Active</option><option value="false" '+(v.enabled===false?'selected':'')+'>Disabled</option></select></div></div>'+
+    '<div class="notice">This account is stored in VENDORS. Website Listing is not changed. Auto-created listing vendors start with an initial password; use NEW PASSWORD to set your own password.</div>'+
+    '<div class="actions" style="justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="beSave">Save Vendor</button></div></div>';
+  document.body.appendChild(d);
+  d.onclick=e=>{if(e.target===d||e.target.closest('[data-close]'))d.remove()};
+  d.querySelector('#beSave').onclick=async()=>{
+    const name=$('beVN').value.trim(),newId=$('beVI').value.trim(),password=$('beVP').value,enabled=$('beVE').value==='true';
+    if(!name||!newId)return toast('Vendor name and Login ID are required.');
+    const b=$('beSave');b.disabled=true;b.textContent='Saving…';
+    try{
+      const r=await gateway()({action:'saveVendor',token:token(),id:newId,name,password,enabled,oldId:String(v.id||''),oldName:String(v.name||'')});
+      if(!r?.success)throw Error(r?.message||'Vendor save failed');
+      d.remove();toast(r.message||'Vendor saved successfully.');
+      if(typeof window.loadVendors==='function')await window.loadVendors();
+      window.__MB_PROC_RENDER?.('vendors');
+    }catch(e){toast(e.message||'Vendor save failed')}finally{b.disabled=false;b.textContent='Save Vendor'}
+  };
+}
+function bindVendorEdits(){
+  document.querySelectorAll('#adminVendorsSection [data-edit]').forEach(b=>{
+    if(b.dataset.backendEdit)return;
+    b.dataset.backendEdit='1';
+    b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();vendorEditBackend(b.dataset.edit)},true);
+  });
+}
+async function deletePOBackend(poId){
+  if(!poId)return;
+  if(!confirm('Delete PO '+poId+'?\n\nThis will remove all rows belonging to this PO from the Purchase Orders sheet and its vendor sheet.'))return;
+  try{
+    const r=await gateway()({action:'savePurchaseOrder',token:token(),deletePO:'true',poId});
+    if(!r?.success)throw Error(r?.message||'PO deletion failed');
+    const p=JSON.parse(localStorage.getItem('mb_web_po_actions_v1')||'{}');p.hiddenPOs=(p.hiddenPOs||[]).filter(x=>String(x)!==String(poId));localStorage.setItem('mb_web_po_actions_v1',JSON.stringify(p));
+    toast(r.message||'PO deleted successfully.');
+    if(typeof window.loadPO==='function')await window.loadPO();
+  }catch(e){toast(e.message||'PO deletion failed')}
+}
+function bindPODeletes(){
+  const box=$('adminPO');if(!box)return;
+  box.querySelectorAll('tbody tr').forEach(tr=>{
+    if(tr.querySelector('[data-backend-po-delete]'))return;
+    const id=tr.querySelector('td')?.textContent?.trim();if(!id)return;
+    const cell=tr.lastElementChild;if(!cell)return;
+    const b=document.createElement('button');b.className='btn';b.textContent='Delete';b.dataset.backendPoDelete='1';
+    b.onclick=e=>{e.preventDefault();e.stopPropagation();deletePOBackend(id)};
+    cell.querySelector('.mbRowActions')?.appendChild(b);
+  });
+}
+const oldRender=window.__MB_PROC_RENDER;
+window.__MB_PROC_RENDER=function(mode){
+  if(typeof oldRender==='function')oldRender(mode);
+  setTimeout(()=>{bindVendorEdits();bindPODeletes()},50);
+};
+setInterval(()=>{bindVendorEdits();bindPODeletes()},1200);
+})();
