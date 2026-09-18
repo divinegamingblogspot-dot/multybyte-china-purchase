@@ -116,7 +116,24 @@ async function createPOFixed(){
     await loadPOFixed();
   }catch(e){toastSafe(e.message)}finally{if(b)b.disabled=false}
 }
-function openPortalFixed(r){$('loginScreen')?.classList.add('hidden');$('portal')?.classList.remove('hidden');const admin=r?.role==='admin';if($('welcome'))$('welcome').textContent=admin?'Administrator Dashboard':'Welcome, '+(r?.name||r?.id||'Vendor');if($('vendorIdentity'))$('vendorIdentity').textContent=admin?'MASTER ACCESS • PRODUCTS • VENDORS • PURCHASE ORDERS':'VENDOR ACCOUNT • '+(r?.id||'');if($('connection'))$('connection').innerHTML='<i></i>LIVE';document.querySelectorAll('.adminOnly').forEach(x=>x.classList.toggle('hidden',!admin));if(admin)loadAdminFixed();else loadVendorFixed();if(typeof showSection==='function')showSection('dashboard')}
+async function openPortalFixed(r){
+  $('loginScreen')?.classList.add('hidden');$('portal')?.classList.remove('hidden');
+  const admin=r?.role==='admin';
+  if($('welcome'))$('welcome').textContent=admin?'Administrator Dashboard':'Welcome, '+(r?.name||r?.id||'Vendor');
+  if($('vendorIdentity'))$('vendorIdentity').textContent=admin?'MASTER ACCESS • PRODUCTS • VENDORS • PURCHASE ORDERS':'VENDOR ACCOUNT • '+(r?.id||'');
+  if($('connection'))$('connection').innerHTML='<i></i>LIVE';
+  document.querySelectorAll('.adminOnly').forEach(x=>x.classList.toggle('hidden',!admin));
+  if(admin)await loadAdminFixed();else await loadVendorFixed();
+  if(typeof window.__MB_ENHANCE?.hydrateImages==='function'){
+    try{
+      if(admin)await window.__MB_ENHANCE.hydrateImages(window.__MB_STATE_PRODUCTS||[]);
+      else await window.__MB_ENHANCE.hydrateImages(window.__MB_STATE_PRODUCTS||[]);
+      if(typeof drawAdminProducts==='function'&&admin)drawAdminProducts();
+      if(typeof drawVendor==='function'&&!admin)drawVendor();
+    }catch(e){}
+  }
+  if(typeof showSection==='function')showSection('dashboard');
+}
 function mbRemoveLifecycleUI(){
   const root=document.getElementById('adminPOSection'); if(!root)return;
   root.querySelectorAll('*').forEach(el=>{
